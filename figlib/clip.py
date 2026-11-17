@@ -18,18 +18,24 @@ Render the Manim scenes (compute node only; the image is not usable on head node
 
 The storyboard works without the clips (a placeholder frame and a `MISSING CLIP` note), so
 layout review never needs the container; draft and final refuse to run without them.
-Manim scene files may import `figlib.palette` (stdlib only): the command binds the repo root
-and puts it on PYTHONPATH inside the container.
+Manim scene files may import `figlib.palette` (stdlib only): the command binds the directory
+that holds the figlib package and puts it on PYTHONPATH inside the container.
+
+The image is the Wuhr lab's (`envs/manim/manim.sif` in Bilal's repo, built from
+`envs/manim/manim.def` there); point FIGLIB_MANIM_SIF elsewhere to use another. Until figlib
+became its own repo (2026-11-17) both paths were derived from one repo root; they are separate
+now because the package no longer lives inside the lab repo.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import imageio_ffmpeg
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
-SIF = ROOT / "envs/manim/manim.sif"
+ROOT = Path(__file__).resolve().parents[1]          # the directory holding the figlib package
+SIF = Path(os.environ.get("FIGLIB_MANIM_SIF", "/Genomics/wuehrlab/People/Bilal/envs/manim/manim.sif"))
 QUALITY = {"draft": ("960,540", 15), "final": ("1920,1080", 30)}
 
 
@@ -101,7 +107,8 @@ def manim_command(scene_file: Path | str, scene_name: str, out_dir: Path | str,
     res, fps = QUALITY[mode]
     scene_file, out_dir = Path(scene_file).resolve(), Path(out_dir).resolve()
     work = out_dir / "_manim"
-    return ["apptainer", "exec", "--bind", f"{ROOT},{out_dir}",
+    binds = ",".join(dict.fromkeys(str(p) for p in (ROOT, scene_file.parent, out_dir)))
+    return ["apptainer", "exec", "--bind", binds,
             "--env", f"PYTHONPATH={ROOT},TEXMFVAR={work}/texmf-var",
             str(sif), "manim", "--resolution", res, "--frame_rate", str(fps),
             "--media_dir", str(work), "-o", f"{scene_name}.mp4",

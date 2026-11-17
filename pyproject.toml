@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "figlib"
+version = "0.1.0"
+description = "Figure tooling for slides and papers: layout linters, an HTML-to-SVG exporter, a CVD-checked palette, and .pptx assembly."
+readme = "README.md"
+requires-python = ">=3.10"
+# Core = figcheck, palette, fonts, inputs. Everything else is behind an extra so a
+# matplotlib-only user does not pull in Chromium or python-pptx.
+dependencies = ["numpy>=1.24", "matplotlib>=3.7"]
+
+[project.optional-dependencies]
+html = ["playwright>=1.40"]                        # check_layout, export_svg (then: playwright install chromium)
+deck = ["python-pptx>=1.0", "cairosvg>=2.7"]       # deck
+video = ["imageio-ffmpeg>=0.5"]                    # anim, scene, clip
+all = ["figlib[html,deck,video]"]
+test = ["figlib[all]", "pytest>=7"]
+
+[tool.setuptools.packages.find]
+include = ["figlib*"]
+
+[tool.setuptools.package-data]
+figlib = ["fonts/*.ttf", "fonts/OFL.txt", "CLAUDE.md"]
