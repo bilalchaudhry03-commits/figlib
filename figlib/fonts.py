@@ -1,0 +1,98 @@
+"""Make the deck's font stack resolvable on this machine.
+
+Calibri is the deck's declared face. It is a proprietary Microsoft font that
+ships with Office and cannot be redistributed onto a cluster, so Argo never had
+it -- every figure was laid out against whatever matplotlib and Chromium fell
+back to (DejaVu Sans, **~25% wider than Calibri**) and then labelled "Calibri".
+Two consequences, both live until 2026-08-27:
+
+  * `figcheck` and `check_layout` measured DejaVu boxes and certified a layout
+    the deliverable would never use.
+  * No PNG rendered here could be trusted, which is why the standing figure note
+    says "the SVG is the authority, look at any PNG before believing it".
+
+**Carlito** closes the gap. It is metric-compatible with Calibri -- same advance
+widths, same line metrics -- under the SIL OFL, so a layout measured in Carlito
+is a layout that holds in Calibri. It is vendored in `figlib/fonts/` rather than
+installed to a home directory, so it is versioned and travels with a clone.
+
+The declared stack does not need to change: fontconfig maps Calibri to Carlito
+once the files are visible, so `Calibri, Arial, Helvetica, sans-serif` resolves
+correctly here and to real Calibri on a presenting machine. Same box either way.
+
+    from figlib import fonts   # registers with matplotlib, links for Chromium
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+FONT_DIR = Path(__file__).resolve().parent / "fonts"
+
+#: The stack every figure in this deck should declare, in priority order.
+STACK = "Calibri, Arial, Helvetica, sans-serif"
+
+#: The same stack as a matplotlib `font.sans-serif` list.
+STACK_LIST = ["Calibri", "Carlito", "Arial", "Helvetica", "DejaVu Sans"]
+
+#: A directory fontconfig scans by default.
+LINK = Path.home() / ".fonts"
+
+_registered = False
+
+
+def ttf_files() -> list[Path]:
+    return sorted(FONT_DIR.glob("*.ttf"))
+
+
+def register() -> list[str]:
+    """Register the vendored TTFs with matplotlib. Idempotent.
+
+    Returns the family names now available. Safe when matplotlib is absent --
+    returns [] rather than raising, so importing figlib does not drag matplotlib
+    in for a caller that only wants the palette.
+    """
+    global _registered
+    try:
+        from matplotlib import font_manager
+    except ImportError:  # pragma: no cover - matplotlib not installed
+        return []
+    if not _registered:
+        for ttf in ttf_files():
+            font_manager.fontManager.addfont(str(ttf))
+        _registered = True
+    return sorted({f.name for f in font_manager.fontManager.ttflist})
+
+
+def ensure_visible() -> str:
+    """Make the vendored faces findable by headless Chromium. Idempotent.
+
+    matplotlib is told about the TTFs directly by `register()`. Chromium is not
+    -- it goes through fontconfig, which knows nothing about this repo. A
+    symlink from a directory fontconfig already scans costs 44 bytes, keeps ONE
+    real copy of the fonts (in the repo, where they are versioned), and needs no
+    environment variable, so it works for every process on this machine.
+
+    Two other approaches were tried on 2026-08-27; both are recorded so neither
+    gets retried:
+
+      * **Copy the TTFs** into a repo-root `.local/share/fonts`, which
+        fontconfig scans via $XDG_DATA_HOME. Works, but duplicates 2.7 MB,
+        leaves two directories to keep in step, and puts a `.local/` at the repo
+        root that reads like an accident.
+      * **FONTCONFIG_FILE pointing at a repo config.** Does NOT work. It
+        replaces the entire configuration rather than adding to it, and a config
+        that includes `/etc/fonts/fonts.conf` still fails, because that file's
+        own includes are relative and resolve against the wrong directory. The
+        symptom is misleading: system fonts still resolve, so it looks like the
+        config is working and the vendored fonts are broken.
+
+    A fresh clone needs this once; the figure tools call it on import.
+    """
+    if not LINK.exists():
+        LINK.symlink_to(FONT_DIR)
+    return str(LINK)
+
+
+register()
+ensure_visible()
