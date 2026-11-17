@@ -7,6 +7,29 @@ cross-project importable package (`from figlib import palette, figcheck, ...`, r
 `lib` (avoids the `sys.path`-order collision commit `d456f03` fixed) and why its modules carry
 no date prefix (importable library code, not a run artifact).
 
+## Its own repo since 2026-11-17 — read this before committing anything here
+
+**figlib is the private GitHub repo `bilalchaudhry03-commits/figlib`, shared with the Wühr lab**
+(user decision 2026-11-17: lab first, wider release maybe later). The working checkout is
+`/Genomics/wuehrlab/People/Bilal/pkgs/figlib` (`pkgs/` is ignored by the wuhrlab repo), and
+**`Bilal/figlib` is a symlink committed in wuhrlab** pointing at `pkgs/figlib/figlib`. So every
+existing consumer — `sys.path` root inserts, `python3 -m figlib.x` from the wuhrlab root, the skill
+shims, `~/.fonts`, the Manim bind — resolves exactly as before, with no install in any env.
+- **Commit figlib changes in `pkgs/figlib`, push there.** wuhrlab no longer tracks these files;
+  `git status` in wuhrlab will not show them, so an edit made through the symlink is easy to leave
+  uncommitted.
+- **Do not also `pip install -e` it into `envs/analysis`** — two import routes would give
+  `palette._repo_root()` (abspath-based) two different answers.
+- **Della needs its own clone** at `pkgs/figlib` (`git clone git@github.com:bilalchaudhry03-commits/figlib.git pkgs/figlib`),
+  made BEFORE pulling the wuhrlab commit that replaced `figlib/` with the symlink, and pulled by hand
+  after that — nothing keeps the two in step.
+- **History before 2026-11-17 is in wuhrlab** (`git log -- figlib` there); this repo started fresh
+  by choice.
+- Labmates install with pip (see `README.md`, which is written for them, not for Claude).
+  Lab-specific defaults that remain on purpose: the palette's named entities, `deck.Theme`'s house
+  style, and `clip.SIF` (overridable with `FIGLIB_MANIM_SIF`). Tests that need the wuhrlab tree
+  skip outside it.
+
 `figlib/` is canonical, and it is versioned. Rebuilt 2026-08-27 — everything that makes a deck
 figure now lives in the repo:
 
@@ -34,8 +57,11 @@ DejaVu — **~25% wider** (485 vs 389 px on the 08-27 test string; Carlito is ~2
 deliverable would never use, which is the real reason behind the standing "the PNGs have
 substituted fonts, the SVG is the authority" note. **`figlib/fonts/` now vendors Carlito**,
 which is metric-compatible with Calibri under the OFL, and fontconfig maps one to the other, so
-no figure's declared stack had to change. `figlib.fonts` symlinks `~/.fonts` → `figlib/fonts` on
-import; **a fresh clone needs that once** (it is idempotent, and the tools call it themselves).
+no figure's declared stack had to change. `fonts.ensure_visible()` symlinks `~/.fonts` → `figlib/fonts`
+(or `~/.fonts/figlib-carlito` if `~/.fonts` is already someone's real directory); **a fresh machine needs
+it once** — `python -m figlib.fonts`, or `check_layout`/`export_svg`, which call it. Importing
+`figlib.fonts` only registers with matplotlib since 2026-11-17: a shared library should not touch a
+labmate's home directory as an import side effect.
 Do not copy the TTFs anywhere — one copy, in the repo, under version control.
 
 **Regenerate and check with one command:**

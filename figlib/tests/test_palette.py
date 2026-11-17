@@ -234,6 +234,8 @@ def test_density_ramp_collides_with_the_blue_marks_and_the_warm_one_does_not():
 
 
 def test_drift_report_defaults_to_this_repo():
+    if not os.path.isdir(pal.default_plotting_dir()):
+        pytest.skip("not inside the wuhrlab repo (karyoPPI/scripts/plotting absent)")
     rows = pal.drift_report()
     assert {(fn, name) for fn, name, _g, _w in rows} == set(pal.KNOWN_DIVERGENCES)
 
