@@ -63,10 +63,11 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-# Importing figlib.fonts registers the vendored Carlito with matplotlib and
-# symlinks it where fontconfig will find it, so headless Chromium measures
-# the face the deck actually declares instead of a fallback 20% wider.
-from figlib import fonts as _fonts  # noqa: F401
+# Register the vendored Carlito with matplotlib (on import) and symlink it where
+# fontconfig will find it (explicitly, since 2026-11-17), so headless Chromium
+# measures the face the deck actually declares instead of a fallback 20% wider.
+from figlib import fonts as _fonts
+_fonts.ensure_visible()
 
 
 # An intersection must be at least this many viewBox units in BOTH axes, and

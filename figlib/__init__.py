@@ -57,7 +57,7 @@ output.
     fonts         vendors Carlito (metric-compatible with the deck's declared
                   Calibri, which is proprietary and has never been installable
                   here) and makes it visible to matplotlib and to Chromium.
-                  Importing it is the whole API.
+                  `python -m figlib.fonts` once per machine for Chromium.
     inputs        `require(path, why=...)` -- declare a figure script's data
                   inputs so a missing one fails in one line at the top instead of
                   a pandas traceback halfway down.

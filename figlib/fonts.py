@@ -20,11 +20,13 @@ The declared stack does not need to change: fontconfig maps Calibri to Carlito
 once the files are visible, so `Calibri, Arial, Helvetica, sans-serif` resolves
 correctly here and to real Calibri on a presenting machine. Same box either way.
 
-    from figlib import fonts   # registers with matplotlib, links for Chromium
+    from figlib import fonts   # registers with matplotlib
+    python -m figlib.fonts     # once per machine: makes Carlito visible to Chromium
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 FONT_DIR = Path(__file__).resolve().parent / "fonts"
@@ -87,12 +89,31 @@ def ensure_visible() -> str:
         symptom is misleading: system fonts still resolve, so it looks like the
         config is working and the vendored fonts are broken.
 
-    A fresh clone needs this once; the figure tools call it on import.
+    A fresh install needs this once: `python -m figlib.fonts`, or let `check_layout` /
+    `export_svg` do it, since both need Chromium to see Carlito. Since 2026-11-17 (figlib
+    became its own repo, shared with the lab) importing `figlib.fonts` alone only registers
+    with matplotlib and no longer touches the home directory.
+
+    If ~/.fonts already exists as a real directory, or as a link to other fonts, the faces
+    are linked INSIDE it as ~/.fonts/figlib-carlito instead; fontconfig scans recursively.
     """
+    if LINK.is_symlink() and not LINK.exists():
+        raise FileNotFoundError(f"{LINK} is a dangling symlink (-> {os.readlink(LINK)}); "
+                                "remove it and run `python -m figlib.fonts` again")
     if not LINK.exists():
         LINK.symlink_to(FONT_DIR)
-    return str(LINK)
+        return str(LINK)
+    if LINK.resolve() == FONT_DIR:
+        return str(LINK)
+    inner = LINK / "figlib-carlito"
+    if inner.is_symlink() and inner.resolve() != FONT_DIR:   # ours, from an older install
+        inner.unlink()
+    if not inner.exists():
+        inner.symlink_to(FONT_DIR)
+    return str(inner)
 
 
 register()
-ensure_visible()
+
+if __name__ == "__main__":
+    print("Carlito visible to fontconfig/Chromium via", ensure_visible())
