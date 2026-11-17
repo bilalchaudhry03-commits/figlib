@@ -56,6 +56,25 @@ def test_ensure_visible_points_at_the_repo_copy_not_a_duplicate():
     assert link.resolve() == fonts.FONT_DIR.resolve()
 
 
+
+def test_ensure_visible_links_inside_an_existing_fonts_dir(tmp_path, monkeypatch):
+    """A labmate's real ~/.fonts must not be replaced: link inside it instead."""
+    home = tmp_path / ".fonts"
+    home.mkdir()
+    monkeypatch.setattr(fonts, "LINK", home)
+    link = Path(fonts.ensure_visible())
+    assert link == home / "figlib-carlito" and link.is_symlink()
+    assert link.resolve() == fonts.FONT_DIR.resolve()
+    assert fonts.ensure_visible() == str(link)          # idempotent
+
+
+def test_ensure_visible_refuses_a_dangling_link(tmp_path, monkeypatch):
+    dangling = tmp_path / ".fonts"
+    dangling.symlink_to(tmp_path / "gone")
+    monkeypatch.setattr(fonts, "LINK", dangling)
+    with pytest.raises(FileNotFoundError, match="dangling"):
+        fonts.ensure_visible()
+
 # -------------------------------------------------------------------- inputs
 
 def test_require_returns_paths_when_present(tmp_path):

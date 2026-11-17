@@ -80,7 +80,7 @@ Every SVG it writes records which exporter version made it.
 
 ```python
 from figlib import palette as pal
-pal.validate(["#0072B2", "#D55E00", "#009E73"])   # checks the colours stay distinct under colour-blindness simulation
+pal.validate(["#0072B2", "#D55E00", "#009E73"])["ok"]   # True if they stay distinct under colour-blindness simulation
 print(pal.as_css_vars())                           # CSS variables to paste into an HTML figure
 ```
 
