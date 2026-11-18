@@ -1,13 +1,7 @@
-"""Regression tests for figlib.export_svg's style baking.
+"""Tests for export_svg's style baking: each element pins a class-set property (fill:none,
+stroke-width, dasharray, ...) that the standalone SVG must carry without the page's stylesheet.
 
-Found 2026-10-19 on generals Fig 5A: the exporter baked class-set fill/stroke
-COLOURS into attributes but dropped `fill:none`, `stroke-width` and
-`stroke-dasharray`. A `.outline{fill:none}` circle drawn over an oocyte
-imported with SVG's default black fill -- every oocyte came out solid black --
-and a dashed class-set circle came out solid. Each element below pins one
-property that the standalone SVG must carry without the page's stylesheet.
-
-Needs headless Chromium (playwright), so the whole export runs once per module.
+Needs headless Chromium, so the export runs once per module.
 """
 
 from __future__ import annotations

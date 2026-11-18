@@ -1,22 +1,5 @@
-"""Tests for lib/figcheck.py, the matplotlib layout linter.
-
-Two halves, and the second matters as much as the first:
-
-  DOES IT FIRE?   Each detector gets a figure broken specifically for it. A
-                  sweep over the repo's existing figures could not establish
-                  this -- those were all hand-fixed before being saved, so
-                  OVERLAP/OUTSIDE/LEGEND never triggered and the detectors
-                  would have been indistinguishable from dead code.
-
-  DOES IT SHUT UP? A clean figure must report nothing. Two regressions found
-                  during the 2026-08-05 build are pinned here, because both
-                  produced confident, plausible, WRONG findings:
-                    - matplotlib's Tick pool retains stale label text
-                    - locator ticks outside the view limits still report a
-                      window extent
-                  and one behaviour that is correct-but-surprising:
-                    - bbox_inches="tight" EXPANDS the output, so overhanging
-                      text is not a defect.
+"""Tests for figcheck: each detector fires on a figure broken for it, and a clean figure
+reports nothing.
 """
 from __future__ import annotations
 

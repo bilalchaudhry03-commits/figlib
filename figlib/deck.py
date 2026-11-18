@@ -1,28 +1,8 @@
-"""Build .pptx decks: figures as SVG-with-PNG-fallback, MP4 movies, a house template, and a linter.
+"""Build .pptx decks: SVG figures with PNG fallback, equations, MP4 movies, a house template, and a linter.
 
-Lifted out of `admin/presentations/group_meetings/py/20260826_build_group_meeting_deck.py`
-on 2026-10-30. That script lived under `admin/`, which is gitignored -- so the deck
-builder was in the same unversioned-tool failure mode `figlib/CLAUDE.md` records for the
-old exporter. What moved here is everything that is not about one talk: slide sizing,
-picture embedding, movies, notes, naming, and the template. Each talk keeps its own
-content (outline/manifest) and its own short build script that calls into this.
-
-**Figures go in as SVG with a PNG fallback**, which is why this is more than
-`add_picture`. OOXML requires the picture's primary blip to be a raster; vector is
-carried as an `asvg:svgBlip` extension on that blip (the `{96DAC541-...}` ext uri).
-PowerPoint 2019/365 renders the SVG -- the figure arrives as vector, with the
-presenter's own fonts, and `Graphics Format > Convert to Shape` still works on it.
-Anything older falls back to the raster. python-pptx has no API for this, hence the XML
-by hand in `add_svg_picture`. The fallbacks are rasterised with cairosvg on Argo, which
-has no Calibri (Carlito stands in), so do not judge a figure by its fallback.
-
-**No secondary text, by construction.** The user's rule (CLAUDE.md, 2026-10-20): title +
-main content only; no subtitles, captions, sub-bullets or status lines; the small grey
-footer is the one exception. The 08-26 builder broke it itself -- its title slide wrote a
-grey 18pt subtitle -- because the rule existed only as prose. So here there is no
-subtitle or caption parameter anywhere, and `lint_deck` fails the build on any
-non-footer text that is grey or below the size floor. The footer is recognised by shape
-name (`FOOTER_NAME`), not by position, so a caption cannot sneak in by sitting low.
+Each talk keeps its own content and a short build script; this holds the reusable parts.
+Slides are title + main content only: there is no subtitle or caption parameter, and
+`require_clean(prs)` fails the build on non-footer text that is grey or under 18 pt.
 """
 
 from __future__ import annotations
@@ -52,7 +32,8 @@ NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 SLIDE_W, SLIDE_H = Emu(12192000), Emu(6858000)
 FALLBACK_PX_WIDTH = 2400
 
-FOOTER_NAME = "figlib-footer"   # the one shape lint_deck lets be small and grey
+FOOTER_NAME = "figlib-footer"   # the one shape lint_deck lets be small and grey; matched by
+                                # name, not position, so a caption can't pass by sitting low
 MIN_BODY_PT = 18                # slide text floor; figures have their own (9pt) via figcheck
 
 INK = "1A242E"
@@ -233,7 +214,10 @@ def bullets(slide, box, items: list[str], theme: Theme):
 # --------------------------------------------------------------------------- pictures
 
 def fallback_png(svg: Path, cache_dir: Path) -> Path:
-    """Rasterise `svg` into `cache_dir`, reusing an up-to-date render."""
+    """Rasterise `svg` into `cache_dir`, reusing an up-to-date render.
+
+    Rendered with Carlito standing in for Calibri, so judge the figure by its SVG, not this.
+    """
     cache_dir.mkdir(parents=True, exist_ok=True)
     png = cache_dir / (svg.stem + ".png")
     if not png.exists() or png.stat().st_mtime < svg.stat().st_mtime:
@@ -285,7 +269,12 @@ def add_svg_picture(slide, svg: Path, png: Path, box):
 
 
 def _attach_svg(slide, pic, svg: Path):
-    """Carry `svg` on `pic`'s raster blip as the asvg:svgBlip extension (see module doc)."""
+    """Carry `svg` on `pic`'s raster blip as the asvg:svgBlip extension.
+
+    OOXML requires a picture's primary blip to be raster; vector rides along as this
+    extension. PowerPoint 2019/365 renders the SVG (and "Convert to Shape" works on it);
+    older versions show the PNG. python-pptx has no API for it, hence the raw XML.
+    """
     package = slide.part.package
     part = Part(package.next_partname("/ppt/media/image%d.svg"), "image/svg+xml",
                 package, calibri_first(svg.read_bytes()))

@@ -1,17 +1,5 @@
-"""Tests for lib/palette.py -- the figure-colour registry and its CVD validator.
-
-The module was built 2026-08-04 after a survey found 70 of 73 plotting scripts
-hardcoding hex, 127 distinct colours, 51 distinct greys, and three model-family
-mappings of which one is inverted. Nothing has been migrated yet (explicit user
-decision), so these tests do two jobs:
-
-  1. guarantee the registry itself is correct and stays correct;
-  2. make the UNMIGRATED state visible and stop it getting worse -- a NEW
-     divergence fails, the eight already recorded do not.
-
-The most load-bearing test is `test_no_new_entity_colour_drift`: it is the one
-that would have caught the RF/GNN inversion at commit time instead of an hour
-before an advisor meeting.
+"""Tests for palette: the registry stays CVD-valid, and `test_no_new_entity_colour_drift`
+fails on any entity-colour divergence not already in KNOWN_DIVERGENCES.
 """
 import sys
 from pathlib import Path

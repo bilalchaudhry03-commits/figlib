@@ -1,25 +1,11 @@
-"""Declare a figure script's data inputs, and fail readably when one is gone.
-
-The failure this exists to prevent, observed 2026-08-27:
-
-    FileNotFoundError: [Errno 2] No such file or directory:
-    '/Genomics/.../massspec/diann_runs/20260615_exp2_oocyte_staging/output/report.stats.tsv'
-
-That is a raw pandas traceback 200 lines into a script, after the imports and
-the first half of the analysis have already run. It says what is missing but not
-what the script was for, whether the file ever existed, or whether the figure it
-feeds is still in the deck. A declared input list turns it into one line at the
-top, before any work, naming every missing file at once rather than the first.
-
-Usage -- declare beside the paths, check before doing anything:
+"""Declare a figure script's data inputs, and fail readably when one is missing.
 
     from figlib.inputs import require
+    SRC = ROOT / "data/quadrants.csv"
+    require(SRC, why="the 2x2 quadrants; built by make_quadrants.py")
 
-    SRC = ROOT / "karyoPPI/data/import/20260804_abstention_gate_quadrants.csv"
-    require(SRC, why="the 2x2 abstention quadrants; built by 20260804_abstention_gate.py")
-
-Convention for new figure scripts: every path the script READS goes through
-`require()` at module level. Paths it WRITES do not -- those are created.
+Call it at module level for every path the script reads, so a missing file fails in one
+line before any work runs, naming every missing input at once.
 """
 
 from __future__ import annotations

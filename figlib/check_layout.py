@@ -1,55 +1,15 @@
 #!/usr/bin/env python3
-"""CANONICAL COPY -- moved into the repo 2026-08-27 alongside export_svg, for the
-same reason: a build tool for a repo artifact belongs under version control.
+"""Layout linter for HTML+SVG figures. Run it before export_svg.
 
-Run as:  python3 -m figlib.check_layout figure.html
+    python -m figlib.check_layout figure.html [--margin 60] [--min-pt 10]
 
-Layout linter for the HTML+SVG schematics. Run it BEFORE export_svg.py.
+Checks, in headless Chromium:
+  OVERFLOW    text crosses the page margin or leaves the viewBox
+  OVERLAP     two text elements intersect (loose tolerances; see OVERLAP_MIN_*)
+  SMALL TYPE  text renders below --min-pt once the figure is fitted to a slide
 
-WHY THIS EXISTS
----------------
-Measured on 2026-08-05 while building three figures in one session: 13 render
-iterations were spent on the loop "render -> look at the PNG -> spot a collision
--> patch". Every collision found that way was machine-detectable. Mid-session an
-ad-hoc getBBox() overflow check was written inline, immediately caught two
-overflows that had survived visual review of a scaled-down screenshot, and was
-then thrown away -- which is exactly the failure mode karyoPPI/lib/palette.py's
-docstring describes about its CVD validator being hand-ported twice and
-discarded both times.
-
-So this is the same fix applied to the same class of problem: write the check
-once, ship it next to the tool it guards.
-
-WHAT IT CHECKS
---------------
-  OVERFLOW    a text element's bbox crosses the page margin, or falls outside
-              the viewBox vertically. This is the one that survives visual
-              review most often, because a figure previewed scaled-to-fit hides
-              a few units of overhang at the right edge.
-
-  OVERLAP     two text elements' bboxes intersect. Tolerances are deliberately
-              loose (see OVERLAP_MIN_*) because adjacent lines of a manually
-              laid-out paragraph legitimately sit close, and a linter that
-              cries wolf gets ignored.
-
-  SMALL TYPE  a text element renders below --min-pt once the figure is fitted
-              to a slide. The skill's two formulas (960/viewBox-width for wide
-              figures, 540/viewBox-height for tall ones) are the two branches of
-              one calculation -- fit-preserving-aspect -- so this computes the
-              fit directly and works for any aspect without a special case.
-
-WHAT IT DELIBERATELY DOES NOT CHECK
------------------------------------
-Text-over-shape overlap. Almost every label in these figures sits on a panel
-rect by design, so the check would be nearly all false positives. Text-vs-text
-is the signal worth having.
-
-Exits 1 if anything fails, so it can gate an export.
-
-Usage:
-    source /Genomics/wuehrlab/People/Bilal/envs/analysis/bin/activate
-    python3 ~/.claude/skills/scientific-figure-design/scripts/check_layout.py figure.html
-    python3 ... check_layout.py figure.html --margin 60 --min-pt 10
+Text over shapes is not checked: most labels sit on a panel rect by design.
+Exits 1 on any finding, so it can gate an export.
 """
 from __future__ import annotations
 

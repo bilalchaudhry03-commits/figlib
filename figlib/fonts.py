@@ -1,24 +1,8 @@
-"""Make the deck's font stack resolvable on this machine.
+"""Vendored Carlito, so layouts measured here match Calibri on the presenting machine.
 
-Calibri is the deck's declared face. It is a proprietary Microsoft font that
-ships with Office and cannot be redistributed onto a cluster, so Argo never had
-it -- every figure was laid out against whatever matplotlib and Chromium fell
-back to (DejaVu Sans, **~25% wider than Calibri**) and then labelled "Calibri".
-Two consequences, both live until 2026-08-27:
-
-  * `figcheck` and `check_layout` measured DejaVu boxes and certified a layout
-    the deliverable would never use.
-  * No PNG rendered here could be trusted, which is why the standing figure note
-    says "the SVG is the authority, look at any PNG before believing it".
-
-**Carlito** closes the gap. It is metric-compatible with Calibri -- same advance
-widths, same line metrics -- under the SIL OFL, so a layout measured in Carlito
-is a layout that holds in Calibri. It is vendored in `figlib/fonts/` rather than
-installed to a home directory, so it is versioned and travels with a clone.
-
-The declared stack does not need to change: fontconfig maps Calibri to Carlito
-once the files are visible, so `Calibri, Arial, Helvetica, sans-serif` resolves
-correctly here and to real Calibri on a presenting machine. Same box either way.
+Calibri is proprietary and can't be installed on the cluster; the fallback (DejaVu Sans) is
+~25% wider, so layouts checked against it don't hold in the deck. Carlito has Calibri's
+metrics, and fontconfig maps Calibri -> Carlito, so figures can keep declaring `STACK`.
 
     from figlib import fonts   # registers with matplotlib
     python -m figlib.fonts     # once per machine: makes Carlito visible to Chromium

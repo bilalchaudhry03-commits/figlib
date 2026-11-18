@@ -1,180 +1,27 @@
-"""Layout linter for matplotlib figures. The chart-side counterpart to
-`~/.claude/skills/scientific-figure-design/scripts/check_layout.py`.
-
-WHY THIS EXISTS
----------------
-Measured 2026-08-05: three figures in one session cost 13 render-look-patch
-iterations, and 7 of those were matplotlib -- legend sitting on the data,
-clipped subtitles, a footnote overrunning the axis labels, a y-label off the
-canvas. Every one was detectable from the figure object. The HTML schematics got
-a linter the same day; this is the half that was still missing.
-
-WHY IT IS A LIBRARY AND NOT A CLI OVER FILES
---------------------------------------------
-An HTML figure is a file you can load and measure. A matplotlib figure exists
-only while its script is running -- once it is a PNG the text positions are
-gone, and no amount of looking at the image recovers them. So the check has to
-run IN-PROCESS, against the live `Figure`, before `savefig`. Two ways in:
+"""Layout linter for matplotlib figures. Runs in-process on the live Figure, before savefig.
 
     from figlib import figcheck
-    figcheck.check(fig)                     # returns findings, prints nothing
-    figcheck.report(fig)                    # prints them, returns the count
-    figcheck.require(fig)                   # raises if anything is wrong
+    figcheck.check(fig)      # returns findings, prints nothing
+    figcheck.report(fig)     # prints them, returns the count
+    figcheck.require(fig)    # raises if anything is wrong
 
-and, for auditing scripts you do not want to edit:
+    python -m figlib.figcheck path/to/plotting_script.py   # audit a script unmodified
 
-    python3 -m figlib.figcheck path/to/plotting_script.py
-
-which installs a `savefig` hook and runs the script unmodified.
-
-WHAT IT CHECKS
---------------
-  OVERLAP     two text artists' boxes intersect. Catches crowded tick labels,
-              a title running into a subtitle, an annotation landing on a
-              label. Tolerances are loose on purpose (see OVERLAP_MIN_*) --
-              a linter that cries wolf gets ignored. Two acceptance rules, and
-              the second exists because the first has a blind spot: an
-              intersection counts if it covers OVERLAP_MIN_FRAC of the smaller
-              box, OR if it is a perpendicular CROSSING (see OVERLAP_CROSS_FRAC).
-
-  OUTSIDE     a text box extends past the figure canvas. This is the one that
-              survives review, because `savefig` silently crops it and the
-              missing words are invisible in the PNG unless you knew to look.
-
-  SMALL TYPE  a font that renders below `min_pt` ONCE THE FIGURE IS PLACED ON A
-              SLIDE. This is the check with teeth: matplotlib sizes are real
-              points, so an 8pt annotation looks fine -- but an 18.4in-wide
-              figure dropped on a 13.333in slide is scaled by 0.72x and that
-              annotation lands at 5.8pt. Wide multi-panel figures are exactly
-              where this bites and exactly where nobody thinks to check.
-
-  LEGEND      data points falling inside the legend's box. Conservative: it
-              flags only when a real number of points are covered, because a
-              legend clipping one marker is usually fine and a legend sitting
-              on the distribution is not.
-
-  OVERDATA    an in-axes text artist sitting on real data marks. ON by default
-              since 2026-08-17 -- see below, the threshold used to make it
-              unable to fire on a normal-sized panel.
-
-  OVERLINE    an in-axes text artist sitting on a plotted LINE (a curve, not
-              markers). OVERDATA's mark-counting is blind to this: a plain
-              `ax.plot` line has no markers to count and is not a patch, so a
-              label parked directly on a curve linted clean. Added 2026-09-09
-              after three such misses in one session -- a MOR-curve label, a
-              staircase decomposition label, and a third caption -- all
-              visibly on top of their line and all reported clean. Tests each
-              text box against the line's own path in display coordinates
-              (Liang-Barsky segment clipping); ON by default since the miss
-              rate today was 3-for-3, not a rare edge case.
-
-              **Exempts a label from the very thing it names.** A repo-wide
-              sweep the same day found this house pattern dominates the hit
-              count: `ax.annotate(f"{v:.1f}", xy=(x, y), xytext=(dx, dy),
-              textcoords="offset points")`, writing a value at the exact point
-              on a bracket/rung/threshold line it is reporting -- by
-              construction as close to that line as a label can get, and nothing
-              like the accidental case OVERLINE exists for. `_anchor_disp` reads
-              the annotation's own `xy`; if it sits within `ANCHOR_TOL_PX` of a
-              given line, that line is exempted for THAT text only -- a
-              collision with any OTHER, unrelated line still fires.
-
-              **Also exempts `axhline`/`axvline`.** The same sweep found a
-              second dominant pattern: a full-panel threshold or context
-              marker, drawn once and captioned nearby, trips OVERLINE on every
-              label anywhere near that value -- it spans the whole axes by
-              construction, not because a real measurement runs there. Both
-              helpers pin their one free axis to axes-fraction [0, 1] via a
-              blended transform, so `_is_full_span_reference_line` detects them
-              exactly rather than by guessing from geometry (mirrors
-              `_is_background_patch`'s treatment of `axhspan`/`axvspan` for
-              OVERDATA).
-
-  EXPANDED    a `bbox_inches="tight"` save grows the canvas past the declared
-              `figsize` (see SMALL above: the slide scale is `slide_width /
-              canvas_width`, so a bigger canvas silently shrinks every label).
-              Added 2026-09-09 after the same mistake landed twice in one
-              session -- SMALL reported the *symptom* (small type) both times
-              and the cause (an overhanging `fig.text` expanding the tight
-              bbox) had to be rediscovered from scratch. `figcheck` already
-              computed `get_tightbbox` for the slide-scale math; this just
-              keeps the comparison to the declared size instead of discarding
-              it.
-
-  CLIPPED     DATA MARKS drawn outside the axes' own limits, i.e. points that
-              are simply not in the figure. **This is the only check here that
-              visual review cannot replace**: every other finding is something
-              you could see by looking at a zoomed crop, and this one is the
-              absence of something. Added 2026-08-17 after a figure passed clean
-              while silently dropping 27 of 179 points off the bottom of a log
-              axis -- and they were the largest proteins in the set, i.e. exactly
-              the data the panel existed to discuss.
-
-  COLORROLE   OPT-IN (`check_color_roles=True`), unlike everything else here.
-              Warns when one legend colour backs two different labels across
-              the figure's axes -- caught by hand 2026-09-09 after shipping a
-              figure where green and blue each meant different things in two
-              panels. `palette.py` validates CVD separation, not semantics, so
-              nothing else checks this. Off by default because a genuinely
-              shared role (e.g. one colour always means "control") is common
-              and correct, so this check will cry wolf more than the others;
-              turn it on for a specific figure rather than globally.
-
-AN ANNOTATION ARROW IS NOT PART OF THE LABEL, FOUND 2026-09-09
-----------------------------------------------------------------
-Cross-cutting, not one check: `Annotation.get_window_extent()` -- matplotlib's
-own method, called by every check above through `_texts()`/`_in_axes_texts()`
--- UNIONS the arrow patch's bbox into whatever it returns, because that keeps
-`bbox_inches="tight"` from clipping the arrow. An annotation arrow is DESIGNED
-to reach from its caption to the data point it names, so that union makes an
-`ax.annotate(..., arrowprops=...)` label's reported footprint include its
-entire reach toward the data -- exactly the region OVERLINE and OVERDATA exist
-to compare it against.
-
-Found chasing an OVERLINE hit a screenshot could not confirm: a two-line
-callout on `20260909_fig_caliper_staircase_v2.py` sat well clear of the curve
-it was near, on-screen, but its `get_window_extent()` ran all the way up to
-the curve because the box also covered the leader line pointing at it, not
-the caption itself. `_text_only_extent()` fixes it at the source -- one place,
-`_texts()`, used by everything else -- via the un-overridden base method
-`Text.get_window_extent(t, renderer)`, which excludes `arrow_patch` if that
-Text happens to be an `Annotation` carrying one. Since this can only SHRINK a
-box that was previously too generous, it strictly removes false positives; it
-cannot introduce new findings anywhere in the file.
-
-TEXT OVER DATA: OPT-IN 2026-08-13, ON BY DEFAULT 2026-08-17
------------------------------------------------------------
-The opt-in version could not fire on this repo's figures, and that was measured
-rather than argued. `OVERDATA_MIN_POINTS` was an ABSOLUTE count of 20 marks,
-calibrated for dense scatter. On a 179-point panel a text box covers at most ~18
-marks no matter where you put it:
-
-    the label that shipped over the cloud, 2026-08-17     17 marks   silent
-    a label parked in the DENSEST part of the same panel  18 marks   silent
-
-So the check was not merely off by default, it was inapplicable to figures of
-the size this repo actually draws. Two changes make it usable, and they had to
-land together:
-
-  * the threshold is now RELATIVE -- `OVERDATA_MIN_FRAC` of the axes' own marks,
-    floored at `OVERDATA_MIN_POINTS_FLOOR` and capped at the old absolute
-    `OVERDATA_MIN_POINTS`. A 179-point panel fires at 9; a 5,000-point scatter
-    still fires at 20.
-  * the check now HONOURS ITS OWN ADVICE. Its message said "move it, or give it
-    an opaque bbox" while nothing inspected whether you had, so lowering the
-    threshold alone would have flagged every correctly-backed label as a fault.
-    A text whose bbox patch is at least `OVERDATA_BBOX_ALPHA` opaque is now
-    treated as remediated.
-
-Patch COVERAGE (a bar chart's bars covering `OVERDATA_MIN_COVER` of the box) is
-unchanged. Full-width patches are background shading and ignored, so an
-`axhspan` with a label in it stays silent.
-
-Pure stdlib + matplotlib. No numpy import at module level, so it stays usable
-from `envs/geometric` as well as `envs/analysis`.
+Checks:
+  OVERLAP    text overlaps text (or crosses it at right angles)
+  OUTSIDE    text runs past the canvas, where savefig silently crops it
+  SMALL      type falls below `min_pt` once the figure is scaled onto a slide
+  LEGEND     the legend covers data points
+  OVERDATA   in-axes text sits on markers or bars (an opaque text bbox counts as fixed)
+  OVERLINE   in-axes text sits on a plotted line
+  EXPANDED   bbox_inches="tight" grows the canvas, shrinking every label on the slide
+  CLIPPED    data falls outside the axes limits and is never drawn -- the one check
+             visual review can't replace. Opt out per axes with `ax.set_gid(CLIP_OK_GID)`.
+  COLORROLE  opt-in: one legend colour means two different things across panels
 """
 from __future__ import annotations
 
+# stdlib + matplotlib only (no module-level numpy), so it imports from lighter envs too.
 import runpy
 import sys
 from dataclasses import dataclass
@@ -1127,8 +974,7 @@ def _main(argv) -> int:
     you have to notice.
     """
     if len(argv) < 2:
-        print(__doc__.split("WHY THIS EXISTS")[0].strip())
-        print("usage: python3 -m figlib.figcheck <plotting_script.py> [args...]")
+        print(__doc__.strip())
         return 2
     matplotlib.use("Agg")
     install()

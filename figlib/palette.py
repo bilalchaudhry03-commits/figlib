@@ -1,76 +1,16 @@
 """One source of truth for figure colour, and the CVD validator that checks it.
 
-WHY THIS EXISTS
----------------
-Measured 2026-08-04 across `karyoPPI/scripts/plotting/` (73 scripts):
-
-    70 of 73 hardcode hex literals          1 imports lib.plotstyle
-    127 distinct colours in use             51 distinct near-neutral greys
-
-**Re-measured 2026-08-27 (80 scripts), and the two halves moved differently:**
-
-    72 of 80 hardcode hex literals          16 import figlib/palette
-
-Adoption went 1 -> 16, so this module is being used. But the hardcoding count
-still went UP, 70 -> 72: new scripts import it *and* keep typing literals, and
-nothing converted the old ones. **The argument for this module is intact; the
-claim that it displaced hardcoding is not, and never was made.** Anyone quoting
-these numbers should quote both -- the adoption figure alone flatters, and the
-hardcoding figure alone reads as failure.
-
-The concrete cost, and it is worse than a swap -- `GNN` is drawn in THREE
-different colours depending on which script you open:
-
-    #009e73 green   20260728_{rf_v2_rank_evidence,size_controlled_yardstick,
-                              yardstick_rebuild}_figures.py
-    #e69f00 orange  20260728_negative_tier_rebuild_figures.py
-    #2a78d6 blue    20260803_confidence_stratified_figures.py,
-                    20260804_nuclear_negative_gate_forest.py   <- the majority
-                                                                  of the newest
-
-and `RF` in two (#0072b2 blue in every 07-28 figure, #eb6834 orange in the
-08-03/08-04 ones). Several of these appear in the SAME 2026-08-05 advisor deck,
-so both families change colour mid-talk. That is not a taste failure, it is a
-missing abstraction: there was no entity registry, so every script invented one.
-
-`lib/plotstyle.py` was created in the 07-29 consolidation but only received the
-FEATURE vocabulary (`feat_color`). Entity colour was never moved. This module is
-that missing half. `plotstyle` keeps feature-family colour; this keeps entity,
-role and validation.
-
-THREE JOBS
-----------
-1. ENTITY / ROLE / SERIES  -- the registry. Semantic name in, hex out.
-2. validate()             -- the dataviz skill's six computable checks, ported
-                             to Python ONCE. `node` is unavailable on Argo
-                             (documented 07-22), so this validator had been
-                             hand-ported to scratch at least twice (2026-08-03
-                             and again 2026-08-04) and thrown away both times.
-                             That re-porting is the root cause of palettes being
-                             eyeballed rather than checked.
-3. as_css_vars()          -- the HTML+SVG schematics in
-                             `admin/presentations/group_meetings/` carry their
-                             own CSS custom properties. Emitting them from here
-                             keeps charts and schematics on one source instead
-                             of two that drift.
-
-Pure stdlib (math only) on purpose -- no numpy -- so it is importable from
-`envs/geometric` as well as `envs/analysis`, same constraint `lib/model.py`
-carries.
-
-MIGRATION STATUS: NONE. Built 2026-08-04 as a forward-looking source of truth by
-explicit user decision; no existing script was repointed. `drift_report()` exists
-to make the unmigrated state visible and to stop it getting worse --
-`figlib/tests/test_palette.py` pins the currently-known divergences, so a NEW one
-fails the suite while the existing ones are recorded rather than silently
-tolerated.
-
-Usage:
     from figlib import palette as pal
-    ax.plot(..., color=pal.entity("GNN"))
+    ax.plot(..., color=pal.entity("GNN"))      # one entity, one colour, in every figure
     ax.tick_params(colors=pal.ROLE["ink_2"])
+    pal.validate(["#0072B2", "#D55E00"])       # contrast + colour-blindness checks
+    print(pal.as_css_vars())                   # the same tokens for HTML+SVG figures
+
+`drift_report()` finds plotting scripts that hardcode a different colour for a registered
+entity; the tests pin the known ones so a new divergence fails.
 """
 
+# stdlib only, on purpose: Manim scene files and lighter envs import this.
 import ast
 import math
 import os
@@ -311,7 +251,7 @@ def sequential(name):
 
 
 # Divergences known and accepted as of 2026-08-04. Nothing has been migrated, so
-# these are a worklist, not bugs to fix silently. tests/test_lib_palette.py pins
+# these are a worklist, not bugs to fix silently. figlib/tests/test_palette.py pins
 # this set: a NEW divergence fails the suite, an existing one does not.
 KNOWN_DIVERGENCES = {
     # GNN -> orange, RF -> blue. The odd one out even among the 07-28 figures.

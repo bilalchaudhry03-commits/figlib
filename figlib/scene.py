@@ -1,29 +1,7 @@
 """Explainer videos: scenes on a cue timeline, rendered as storyboard, draft or final.
 
-Added 2026-11-02 after the first explainer (`explainers/20261102_flux_model/`) cost three
-cluster renders to get right. Each failure maps to a rule here:
-
-* **A scene is `draw(t)`: a pure function of its local time.** The 11-02 script was one
-  generator chain, so seeing scene 6 meant simulating scenes 1-5, nothing could be
-  previewed, and a scene-3 bug cost a job. A pure `draw(t)` can be called at any t, in
-  any order, which is what makes the storyboard possible.
-* **`draw` never advances a model.** Simulate first, into arrays indexed by frame, then
-  draw from them. In the 11-02 script the on-screen transit of a copy also froze its model
-  state, and tau_nuc read 2.3 h against 1.0 true: a bias that hides inside a drawing loop.
-  `render(checks=...)` runs the video's model checks BEFORE any frame, and a failing check
-  fails the run.
-* **Every fade is a `Cue`, clamped to [0, 1].** Hand-written `ramp(i - 300)` offsets went
-  negative and crashed matplotlib (job 13308168).
-* **Captions are timed from word count** (2.5 words/s, 1.5 s minimum: slower than reading
-  speed because the viewer is also watching motion) and written as `.srt` beside the
-  video, so a narration can replace them later.
-* **Three modes.** `storyboard`: one still per caption, each run through `figcheck`, one
-  contact PNG, on the head node in seconds. `draft`: 960x540 at 15 fps. `final`: 1920x1080
-  at 30 fps. Draft halves the figure dpi, so the layout is identical, only smaller.
-* **The storyboard tests purity, not just layout (2026-11-13).** Every still is drawn twice,
-  once in scene order and once straight after a still from far away in the list, and any
-  still whose pixels change is reported `IMPURE`. A `draw(t)` that reads state another scene
-  left behind looks right in scene order, which is the only order a contact sheet shows.
+A scene's `draw(t)` must be a pure function of its local time: simulate the model first,
+into arrays, then draw from them. That is what lets any frame be previewed out of order.
 
     from figlib import scene
     tl = scene.Timeline().at("eq", 1.0, 0.5)
@@ -32,10 +10,9 @@ cluster renders to get right. Each failure maps to a rule here:
                     captions=caps)
     scene.render(fig, [s], "storyboard", stem, caption=cap_artist, checks=[my_check])
 
-`EqRow` is the bracketed-equation primitive: a row of mathtext pieces laid out left to
-right from their measured extents, with a labelled bracket under any piece. It fails at
-construction on a piece mathtext cannot parse (`\\big` crashed the 11-13 storyboard mid-draw
-instead), and at `layout()` when the row runs past `max_x` of the figure.
+Modes: `storyboard` (one figcheck'd still per caption, plus a purity check, in seconds),
+`draft` (960x540 @ 15 fps), `final` (1920x1080 @ 30 fps). `EqRow` lays out a row of
+mathtext pieces with labelled brackets underneath.
 """
 from __future__ import annotations
 
@@ -52,6 +29,7 @@ from PIL import Image, ImageDraw
 from figlib import anim, figcheck
 
 MODES = {"storyboard": (None, 1.0), "draft": (15, 0.5), "final": (30, 1.0)}   # fps, dpi scale
+# Caption timing: slower than reading speed, because the viewer is also watching motion.
 WPS, MIN_CAPTION_S, CAPTION_GAP_S = 2.5, 1.5, 0.3
 
 

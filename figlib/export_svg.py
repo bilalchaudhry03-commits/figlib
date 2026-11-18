@@ -1,57 +1,18 @@
 #!/usr/bin/env python3
-"""Render a scientific-figure-design HTML file to a standalone SVG.
+"""Render an HTML figure to a standalone SVG that opens correctly in Illustrator and PowerPoint.
 
-CANONICAL COPY. Moved into the repo from ~/.claude/skills/ on 2026-08-27 and
-given a version, because it is a BUILD TOOL for a repo artifact and living
-outside version control made its output unattributable: on 2026-08-27, 13 of 19
-deck SVGs failed to reproduce from their HTML and separating "the exporter
-improved" from "the figure drifted" took hours. Every SVG it writes now carries
-a <metadata> stamp naming this version, so that question is answerable by
-reading the file.
+    python -m figlib.export_svg input.html output.svg [options]
 
-Run as:  python3 -m figlib.export_svg in.html out.svg
-
-
-Loads the HTML in headless Chromium so any layout-computing <script> in the
-page runs first, then bakes every CSS custom-property color reference
-(var(--x)) on the SVG subtree down to its literal computed value -- Illustrator's
-SVG parser does not resolve var() the way a browser does -- and inlines
-font-family/size/weight onto text so labels survive without the page's
-stylesheet. Since 1.2.0 it also bakes class/inline-set `fill:none`/`stroke:none`
-and stroke geometry/opacity (see the comment above GEOM in RESOLVE_JS).
-
-Three things this also does, each because it silently produced a broken
-deliverable in practice (2026-08-04):
-
-  * **Emits width/height when the author did not.** These figures size their
-    SVG with a CSS rule (`svg{width:100%}`), which does not travel with
-    outerHTML, so the export carried a viewBox and no intrinsic size. Illustrator
-    copes; **PowerPoint does not** -- with no width/height it imports the graphic
-    at a small default, which reads as "the figure is too small" and is not
-    fixable by scaling on the slide without quality loss. The emitted size fits
-    the figure to a 16:9 slide (13.333 x 7.5 in) preserving aspect, so a
-    wide figure comes out slide-width and a tall one comes out slide-height.
-    An author-set width/height always wins; `--no-size` opts out entirely.
-
-  * **Sanitises XML comments.** An XML comment may not contain a double hyphen.
-    HTML tolerates `<!-- ------ card 1 ------ -->`; XML does not, so such a file
-    is rejected outright by Illustrator and PowerPoint at load with a parse
-    error pointing at a line the author has no reason to suspect. Runs of two or
-    more hyphens inside comments are collapsed to one.
-
-  * **Parses its own output before reporting success.** The pre-existing
-    var()-resolution check verifies colours survive; it cannot see a
-    well-formedness problem, so a file could pass every check and still be
-    unopenable. This is the guard that actually catches that class.
-
-Usage:
-    python3 export_svg.py input.html output.svg [options]
+Runs the page in headless Chromium, then bakes computed styles (CSS-variable colours, fonts,
+fill/stroke `none`, stroke geometry, opacity) into attributes, gives the SVG an intrinsic
+size, converts <marker> arrowheads to plain paths, fixes XML-invalid comments, and checks the
+result parses before writing it. Every output carries a <metadata> stamp with this version.
 
 Options:
-    --slide WxH   target slide size in inches for auto-sizing
-                  (default 13.333x7.5, i.e. 16:9 widescreen)
-    --size WxH    force this exact output size in inches, ignoring the slide fit
-    --no-size     do not emit width/height at all (pre-2026-08-04 behaviour)
+    --slide WxH   slide size in inches to fit the output to (default 13.333x7.5)
+    --size WxH    force this exact output size in inches
+    --no-size     don't emit width/height
+    --group       cluster loose neighbouring elements into <g>
 """
 import os
 import re
@@ -76,6 +37,7 @@ RESOLVE_JS = """
   const svg = document.querySelector('svg');
   if (!svg) throw new Error('No <svg> element found in page');
 
+  // Illustrator's SVG parser doesn't resolve var(), so colours are baked to literals.
   const presentationAttrs = ['fill', 'stroke', 'stop-color'];
 
   // Elements that actually paint. Restricted on purpose: blanket-inlining fill

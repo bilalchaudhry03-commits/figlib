@@ -1,9 +1,4 @@
-"""Tests for the figure-build modules added 2026-08-27.
-
-Each test pins a behaviour that was got WRONG first, on the principle the rest
-of this repo's tests follow: a test that only restates the happy path would not
-have caught any of these.
-"""
+"""Tests for fonts and inputs."""
 
 from __future__ import annotations
 
