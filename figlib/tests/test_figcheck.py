@@ -85,13 +85,16 @@ def test_require_raises_and_check_does_not(fig):
 
 def test_a_rotated_label_crossing_a_title_is_reported(fig):
     """A rotated label piercing a title scores under the area rule; `_crosses` catches it."""
-    ax = fig.add_subplot()
-    ax.set_title("D  a panel title wide enough to be crossed", fontsize=11)
-    # 0.85 up, so the label runs off the top of the axes and through the title
-    # exactly the way a staggered per-point annotation does.
-    ax.text(0.5, 0.85, "a tall rotated label", transform=ax.transAxes,
-            rotation=90, ha="center", va="bottom", fontsize=9)
-    found = [f for f in figcheck.check(fig) if f.kind == "OVERLAP"]
+    # Pinned to matplotlib's bundled font: the area fraction depends on glyph metrics,
+    # and the default family resolves differently from machine to machine.
+    with plt.rc_context({"font.family": "DejaVu Sans"}):
+        ax = fig.add_subplot()
+        ax.set_title("D  a panel title wide enough to be crossed", fontsize=11)
+        # 0.85 up, so the label runs off the top of the axes and through the title
+        # exactly the way a staggered per-point annotation does.
+        ax.text(0.5, 0.85, "a tall rotated label", transform=ax.transAxes,
+                rotation=90, ha="center", va="bottom", fontsize=9)
+        found = [f for f in figcheck.check(fig) if f.kind == "OVERLAP"]
     assert found, "a rotated label piercing the title must be reported"
     # the area fraction alone would have passed
     assert all(float(f.detail.split("%")[0].split()[-1]) < 100 * figcheck.OVERLAP_MIN_FRAC

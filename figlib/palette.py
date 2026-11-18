@@ -6,8 +6,9 @@
     pal.validate(["#0072B2", "#D55E00"])       # contrast + colour-blindness checks
     print(pal.as_css_vars())                   # the same tokens for HTML+SVG figures
 
-`drift_report()` finds plotting scripts that hardcode a different colour for a registered
-entity; the tests pin the known ones so a new divergence fails.
+Find hardcoded colours that disagree with the registry, or should be tokens:
+
+    python -m figlib.palette drift scripts/ figures/html/   # exits 1 on any disagreement
 """
 
 # stdlib only, on purpose: Manim scene files and lighter envs import this.
@@ -151,19 +152,6 @@ def sequential(name):
             f"unknown sequential ramp {name!r}. Known: {sorted(SEQUENTIAL)}. "
             "Add it here rather than hardcoding a cmap string in a figure."
         ) from None
-
-
-# Known entity-colour divergences in the author's plotting scripts (a migration
-# worklist). test_palette.py pins this set: a new divergence fails, these don't.
-KNOWN_DIVERGENCES = {
-    # GNN -> orange, RF -> blue.
-    ("20260728_negative_tier_rebuild_figures.py", "RF"): "#0072b2",
-    ("20260728_negative_tier_rebuild_figures.py", "GNN"): "#e69f00",
-    # GNN -> green (RF is implicit via `... else BLUE`, so not recorded).
-    ("20260728_rf_v2_rank_evidence_figures.py", "GNN"): "#009e73",
-    ("20260728_size_controlled_yardstick_figures.py", "GNN"): "#009e73",
-    ("20260728_yardstick_rebuild_figures.py", "GNN"): "#009e73",
-}
 
 
 # Entity class. The lightness-band and chroma-floor checks apply to marks doing
@@ -473,25 +461,6 @@ def scan_entity_mappings(path):
     return found
 
 
-# Default scan locations. These point into the author's lab-repo layout (karyoPPI/,
-# admin/) and only resolve when figlib is used from that checkout; everyone else
-# should pass `plotting_dir=` / `dirs=` explicitly.
-def _repo_root():
-    """The directory holding the figlib package."""
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-def default_plotting_dir():
-    return os.path.join(_repo_root(), "karyoPPI", "scripts", "plotting")
-
-
-#: May be absent (the schematics are local-only), so consumers must tolerate that.
-SCHEMATIC_DIRS = (
-    os.path.join(_repo_root(), "admin", "presentations", "group_meetings", "html"),
-    os.path.join(_repo_root(), "admin", "presentations", "martin_meetings"),
-)
-
-
 def all_tokens():
     """{lowercase hex: [css token names]} across every axis in the registry."""
     out = {}
@@ -553,43 +522,64 @@ def scan_schematic_literals(path, near_miss_de=3.0):
     return rows
 
 
-def schematic_drift_report(dirs=None):
-    """[(file, hex, kind, token)] over every schematic that exists on disk."""
-    rows = []
-    for d in (dirs if dirs is not None else SCHEMATIC_DIRS):
+def _files(dirs, ext):
+    if not dirs:
+        raise TypeError("pass at least one directory to scan")
+    for d in dirs:
         if not os.path.isdir(d):
-            continue
+            raise FileNotFoundError(f"not a directory: {d}")
         for fn in sorted(os.listdir(d)):
-            if not fn.endswith(".html"):
-                continue
-            for h, kind, tok in scan_schematic_literals(os.path.join(d, fn)):
-                rows.append((fn, h, kind, tok))
-    return rows
+            if fn.endswith(ext):
+                yield os.path.join(d, fn)
 
 
-def drift_report(plotting_dir=None):
-    """[(script, entity, found_hex, registry_hex)] for every disagreement.
+def schematic_drift_report(*dirs):
+    """[(path, hex, kind, token)] for hex literals in the .html files in `dirs` that are,
+    or nearly are, registry colours (see `scan_schematic_literals`)."""
+    return [(path, h, kind, tok)
+            for path in _files(dirs, ".html")
+            for h, kind, tok in scan_schematic_literals(path)]
 
-    Sees only what `scan_entity_mappings` can resolve statically; colours reached
-    through deeper indirection are invisible without executing the script, which is
-    why KNOWN_DIVERGENCES is maintained by hand.
+
+def drift_report(*dirs):
+    """[(path, entity, found_hex, registry_hex)] for every {entity: hex} in the .py files in
+    `dirs` that disagrees with ENTITY.
+
+    Sees only what `scan_entity_mappings` can resolve statically; colours reached through
+    function calls or imports are invisible.
     """
-    plotting_dir = plotting_dir or default_plotting_dir()
-    if not os.path.isdir(plotting_dir):
-        raise FileNotFoundError(
-            f"no plotting scripts at {plotting_dir}; pass drift_report(plotting_dir=...)")
     rows = []
-    for fn in sorted(os.listdir(plotting_dir)):
-        if not fn.endswith(".py"):
-            continue
-        for name, got in scan_entity_mappings(os.path.join(plotting_dir, fn)).items():
+    for path in _files(dirs, ".py"):
+        for name, got in scan_entity_mappings(path).items():
             want = ENTITY.get(name, "").lower()
             if want and got != want:
-                rows.append((fn, name, got, want))
+                rows.append((path, name, got, want))
     return rows
+
+
+def _print_drift(dirs):
+    rows = drift_report(*dirs)
+    print(f"=== {len(rows)} entity colour(s) that disagree with the registry ===")
+    for path, name, got, want in rows:
+        print(f"  {path}  {name}: {got} (registry {want}) -> use entity({name!r})")
+    sch = schematic_drift_report(*dirs)
+    exact = [r for r in sch if r[2] == "exact"]
+    near = [r for r in sch if r[2] == "near"]
+    print(f"\n=== HTML: {len(exact)} literal(s) that are registry colours, "
+          f"{len(near)} near-miss(es) ===")
+    for path, h, _kind, tok in near:
+        print(f"  NEAR  {path}  {h} ~ {tok}")
+    for path, h, _kind, tok in exact:
+        print(f"  exact {path}  {h} -> use var({tok})")
+    return len(rows) + len(near)
 
 
 if __name__ == "__main__":
+    import sys
+    if sys.argv[1:2] == ["drift"]:
+        if len(sys.argv) < 3:
+            sys.exit("usage: python -m figlib.palette drift DIR [DIR ...]")
+        sys.exit(1 if _print_drift(sys.argv[2:]) else 0)
     ok, lines = validate_reference()
     for l in lines:
         print(l)
@@ -607,33 +597,8 @@ if __name__ == "__main__":
 
     sch = [v["fill"] for v in list(SCHEMATIC.values())[:5]]
     r = validate(sch, pairs="all")
-    print(f"\nschematic chain slots (Okabe-Ito, separate medium)")
+    print("\nschematic chain slots (Okabe-Ito, separate medium)")
     print(f"  worst CVD {r['worst_cvd']:.1f}   worst normal-vision "
           f"{r['worst_normal']:.1f}   ok={r['ok']}")
     for w in r["warns"]:
         print(f"    WARN {w}")
-
-    plotting = default_plotting_dir()
-    if os.path.isdir(plotting):
-        rows = drift_report()
-        print(f"\n=== drift: {len(rows)} statically-visible disagreements ===")
-        for fn, name, got, want in rows:
-            print(f"  {fn}  {name}: {got} (registry {want})")
-        known = set(KNOWN_DIVERGENCES)
-        seen = {(fn, name) for fn, name, _g, _w in rows}
-        print(f"  all recorded in KNOWN_DIVERGENCES: {seen == known}")
-        if seen - known:
-            print(f"  NEW, not recorded: {sorted(seen - known)}")
-
-    sch = schematic_drift_report()
-    if sch:
-        exact = [r for r in sch if r[2] == "exact"]
-        near = [r for r in sch if r[2] == "near"]
-        print(f"\n=== schematic drift: {len(exact)} literals that are registry "
-              f"colours, {len(near)} near-misses ===")
-        for fn, h, kind, tok in near:
-            print(f"  NEAR  {fn}  {h} ~ {tok}")
-        for fn, h, kind, tok in exact[:12]:
-            print(f"  exact {fn}  {h} -> use var({tok})")
-        if len(exact) > 12:
-            print(f"  ... and {len(exact) - 12} more exact matches")

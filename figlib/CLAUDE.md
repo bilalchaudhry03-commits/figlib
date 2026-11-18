@@ -13,13 +13,13 @@ for labmates); this file is for working on the code.
   Manim bind all resolve without an install.
 - **Commit and push in `pkgs/figlib`.** wuhrlab doesn't track these files, so an edit made through
   the symlink won't show in wuhrlab's `git status`.
-- **Don't `pip install -e` it into `envs/analysis`** — a second import route gives `palette._repo_root()`
-  a different answer.
+- No install is needed in the wuhrlab envs; the symlink covers it.
 - Della has its own clone at `pkgs/figlib`, pulled by hand.
 - History before 2026-11-17 is in wuhrlab (`git log -- figlib`).
-- Lab-specific defaults are intentional: the palette's named entities, `deck.Theme`, `clip.SIF`
-  (override with `FIGLIB_MANIM_SIF`), and `palette`'s drift-scan dirs (resolve only inside wuhrlab).
-  Tests that need the wuhrlab tree skip outside it.
+- Lab-specific defaults are intentional: the palette's named entities, `deck.Theme`, and `clip.SIF`
+  (override with `FIGLIB_MANIM_SIF`). Nothing in the package reads the wuhrlab tree; checks of
+  wuhrlab's own scripts (entity-colour drift, known divergences) belong in wuhrlab's tests, using
+  `palette.drift_report(dir)`.
 
 ## Modules
 

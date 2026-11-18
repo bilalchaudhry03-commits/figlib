@@ -101,6 +101,8 @@ print(pal.as_css_vars())                           # CSS variables to paste into
 
 The named colours (`pal.entity("GNN")`, `pal.argument("broken")`, …) are the ones from Bilal's slides. Use them if you want your figures to match; otherwise use `validate` on your own colours.
 
+`python -m figlib.palette drift scripts/ html/` lists hardcoded colours that disagree with the named ones, or HTML literals that should be CSS variables.
+
 ### `deck`: build a `.pptx` from Python
 
 `deck` builds on python-pptx:

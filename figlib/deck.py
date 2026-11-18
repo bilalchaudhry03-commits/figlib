@@ -490,10 +490,10 @@ def _set_timing(slide, clicks: list[str]) -> None:
         f'restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" '
         f'nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>'
         + "".join(clicks) +
-        f'</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl>'
-        f'<p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond '
-        f'evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
-        f'</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>'
+        '</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl>'
+        '<p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond '
+        'evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
+        '</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>'
     )
     sld = slide._element
     old = sld.find(qn("p:timing"))
