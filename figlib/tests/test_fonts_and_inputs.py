@@ -159,6 +159,14 @@ def _check_layout(tmp_path, family):
     home = tmp_path / "home"            # no ~/.fonts: the tool must bring its own font
     home.mkdir()
     env = {**__import__("os").environ, "HOME": str(home)}
+    # Playwright's browsers live under the real home by default (~/.cache/ms-playwright, or
+    # $XDG_CACHE_HOME); swapping HOME must not hide them. Pin the real location first. Without this
+    # these tests passed on Argo (browser path set explicitly) and failed in CI.
+    if "PLAYWRIGHT_BROWSERS_PATH" not in env:
+        real = Path.home()
+        cache = (real / "Library" / "Caches") if sys.platform == "darwin" else \
+            Path(env.get("XDG_CACHE_HOME") or real / ".cache")
+        env["PLAYWRIGHT_BROWSERS_PATH"] = str(cache / "ms-playwright")
     return subprocess.run([sys.executable, "-m", "figlib.check_layout", str(html)],
                           capture_output=True, text=True, cwd=REPO, env=env)
 
