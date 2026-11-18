@@ -53,6 +53,6 @@ wider than the figure.
 
 For equation morphs only: render with Manim, then show the MP4 as a scene with
 `Scene(..., clip=clip.Clip(mp4))`; captions are still drawn by matplotlib on top.
-`clip.render_manim(scene_file, ["SceneName"], out_dir)` runs Manim inside an Apptainer image; set
-`FIGLIB_MANIM_SIF` to your image path. The storyboard shows a placeholder for a missing clip;
+`clip.render_manim(scene_file, ["SceneName"], out_dir)` runs Manim inside an Apptainer image: set
+`FIGLIB_MANIM_SIF` to the image's path, or pass `sif=` (it raises if neither is set). The storyboard shows a placeholder for a missing clip;
 draft and final refuse to run without it.

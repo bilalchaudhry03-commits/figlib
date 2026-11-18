@@ -1,8 +1,8 @@
 """Pre-rendered Manim clips as scenes in a figlib.scene explainer.
 
 Manim renders only the equation morphs; matplotlib draws everything else, including the
-captions on top. Render the clips first (compute node, Apptainer image at `SIF`), then show
-one with `Scene(..., clip=Clip(mp4))`:
+captions on top. Render the clips first (compute node, Apptainer image from `sif=` or
+$FIGLIB_MANIM_SIF), then show one with `Scene(..., clip=Clip(mp4))`:
 
     from figlib import clip, scene
     morph = clip.Clip(HERE / "clips" / "Substitute.mp4")
@@ -23,8 +23,6 @@ import numpy as np
 # The directory holding the figlib package; bound into the container and put on PYTHONPATH
 # so Manim scene files can import figlib.palette.
 ROOT = Path(__file__).resolve().parents[1]
-# The Wuhr lab's Manim image on Argo; set FIGLIB_MANIM_SIF to use another.
-SIF = Path(os.environ.get("FIGLIB_MANIM_SIF", "/Genomics/wuehrlab/People/Bilal/envs/manim/manim.sif"))
 QUALITY = {"draft": ("960,540", 15), "final": ("1920,1080", 30)}
 
 
@@ -71,7 +69,17 @@ class Clip:
         return self._frame
 
 
-def render_manim(scene_file: Path | str, scene_names, out_dir: Path | str, mode: str = "final") -> list[Path]:
+def manim_image(sif: Path | str | None = None) -> Path:
+    """The Apptainer image with Manim: `sif` if given, else $FIGLIB_MANIM_SIF."""
+    sif = sif or os.environ.get("FIGLIB_MANIM_SIF")
+    if not sif:
+        raise RuntimeError("no Manim image: set FIGLIB_MANIM_SIF to an Apptainer .sif with Manim, "
+                           "or pass sif=")
+    return Path(sif)
+
+
+def render_manim(scene_file: Path | str, scene_names, out_dir: Path | str, mode: str = "final",
+                 sif: Path | str | None = None) -> list[Path]:
     """Render each Manim scene and move its MP4 to `<out_dir>/<name>.mp4`. Compute node only."""
     import shutil
     import subprocess
@@ -79,7 +87,7 @@ def render_manim(scene_file: Path | str, scene_names, out_dir: Path | str, mode:
     out_dir.mkdir(parents=True, exist_ok=True)
     outs = []
     for name in scene_names:
-        subprocess.run(manim_command(scene_file, name, out_dir, mode), check=True)
+        subprocess.run(manim_command(scene_file, name, out_dir, mode, sif), check=True)
         made = sorted((out_dir / "_manim" / "videos").rglob(f"{name}.mp4"), key=lambda p: p.stat().st_mtime)
         if not made:
             raise FileNotFoundError(f"manim wrote no {name}.mp4 under {out_dir / '_manim'}")
@@ -91,9 +99,13 @@ def render_manim(scene_file: Path | str, scene_names, out_dir: Path | str, mode:
 
 
 def manim_command(scene_file: Path | str, scene_name: str, out_dir: Path | str,
-                  mode: str = "final", sif: Path = SIF) -> list[str]:
-    """argv that renders `scene_name` from `scene_file` to `<out_dir>/<scene_name>.mp4`."""
+                  mode: str = "final", sif: Path | str | None = None) -> list[str]:
+    """argv that renders `scene_name` from `scene_file` to `<out_dir>/<scene_name>.mp4`.
+
+    `sif` defaults to $FIGLIB_MANIM_SIF, read at call time.
+    """
     res, fps = QUALITY[mode]
+    sif = manim_image(sif)
     scene_file, out_dir = Path(scene_file).resolve(), Path(out_dir).resolve()
     work = out_dir / "_manim"
     binds = ",".join(dict.fromkeys(str(p) for p in (ROOT, scene_file.parent, out_dir)))

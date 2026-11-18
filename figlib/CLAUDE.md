@@ -16,8 +16,9 @@ for labmates); this file is for working on the code.
 - No install is needed in the wuhrlab envs; the symlink covers it.
 - Della has its own clone at `pkgs/figlib`, pulled by hand.
 - History before 2026-11-17 is in wuhrlab (`git log -- figlib`).
-- Lab-specific defaults are intentional: the palette's named entities, `deck.Theme`, and `clip.SIF`
-  (override with `FIGLIB_MANIM_SIF`). Nothing in the package reads the wuhrlab tree; checks of
+- Lab-specific defaults are intentional: the palette's named entities and `deck.Theme`. The Manim
+  image is not a default: export `FIGLIB_MANIM_SIF=/Genomics/wuehrlab/People/Bilal/envs/manim/manim.sif`
+  (envs' activate scripts or the explainer sbatch), or pass `sif=`. Nothing in the package reads the wuhrlab tree; checks of
   wuhrlab's own scripts (entity-colour drift, known divergences) belong in wuhrlab's tests, using
   `palette.drift_report(dir)`.
 

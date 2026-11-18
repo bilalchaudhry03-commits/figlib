@@ -120,8 +120,7 @@ The house style is in the `Theme` class.
 - `inputs.require(path, why=...)`: declare a script's input files, so a missing one fails on line 1 with a clear message.
 - `anim.write(frames, stem)`: frames → MP4, a poster frame and a contact sheet, using ffmpeg from `imageio-ffmpeg`.
 - `scene`, `clip`: used for explainer videos.
-  - `clip` renders Manim clips with the lab's Apptainer image on Argo.
-  - To use a different image, set `FIGLIB_MANIM_SIF`.
+  - `clip` renders Manim clips inside an Apptainer image. Set `FIGLIB_MANIM_SIF` to the image's path (on Argo, the lab's is `/Genomics/wuehrlab/People/Bilal/envs/manim/manim.sif`), or pass `sif=`.
 
 ## Tests
 

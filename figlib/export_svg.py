@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
 """Render an HTML figure to a standalone SVG that opens correctly in Illustrator and PowerPoint.
 
-    python -m figlib.export_svg input.html output.svg [options]
+    python -m figlib.export_svg input.html output.svg [--group] [--slide WxH] [--size WxH] [--no-size]
 
 Runs the page in headless Chromium, then bakes computed styles (CSS-variable colours, fonts,
 fill/stroke `none`, stroke geometry, opacity) into attributes, gives the SVG an intrinsic
 size, converts <marker> arrowheads to plain paths, fixes XML-invalid comments, and checks the
 result parses before writing it. Every output carries a <metadata> stamp with this version.
-
-Options:
-    --slide WxH   slide size in inches to fit the output to (default 13.333x7.5)
-    --size WxH    force this exact output size in inches
-    --no-size     don't emit width/height
-    --group       cluster loose neighbouring elements into <g>
 """
+import argparse
 import os
 import re
 import sys
@@ -332,46 +327,31 @@ RESOLVE_JS = """
 """
 
 
-def parse_wh(value, flag):
+def parse_wh(value):
+    """argparse type for WxH in inches, e.g. 13.333x7.5."""
     m = re.fullmatch(r"\s*([0-9.]+)\s*[xX*]\s*([0-9.]+)\s*", value or "")
     if not m:
-        sys.exit(f"error: {flag} expects WxH in inches, e.g. 13.333x7.5")
+        raise argparse.ArgumentTypeError("expects WxH in inches, e.g. 13.333x7.5")
     return float(m.group(1)), float(m.group(2))
 
 
-def main():
-    args = sys.argv[1:]
-    slide = DEFAULT_SLIDE
-    force = None
-    emit_size = True
-    group = False
-
-    positional = []
-    i = 0
-    while i < len(args):
-        a = args[i]
-        if a == "--no-size":
-            emit_size = False
-        elif a == "--group":
-            group = True
-        elif a == "--slide":
-            i += 1
-            slide = parse_wh(args[i] if i < len(args) else None, "--slide")
-        elif a == "--size":
-            i += 1
-            force = parse_wh(args[i] if i < len(args) else None, "--size")
-        elif a.startswith("-"):
-            sys.exit(f"error: unknown option {a}\n\n{__doc__}")
-        else:
-            positional.append(a)
-        i += 1
-
-    if len(positional) != 2:
-        sys.exit(f"usage: {sys.argv[0]} input.html output.svg [--slide WxH] "
-                 f"[--size WxH] [--no-size] [--group]")
-
-    src = os.path.abspath(positional[0])
-    dst = positional[1]
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="python -m figlib.export_svg",
+                                 description=__doc__.strip().splitlines()[0])
+    ap.add_argument("input", help="HTML figure")
+    ap.add_argument("output", help="SVG to write")
+    ap.add_argument("--slide", type=parse_wh, default=DEFAULT_SLIDE, metavar="WxH",
+                    help="slide size in inches to fit the output to (default 13.333x7.5)")
+    ap.add_argument("--size", type=parse_wh, metavar="WxH",
+                    help="force this exact output size in inches")
+    ap.add_argument("--no-size", action="store_true", help="don't emit width/height")
+    # Opt-in: proximity grouping is a heuristic and occasionally brackets two things that are
+    # merely adjacent. Worth it on a figure that exports as a flat pile, not on every figure.
+    ap.add_argument("--group", action="store_true",
+                    help="cluster loose neighbouring elements into <g>")
+    args = ap.parse_args(argv)
+    slide, force, emit_size, group = args.slide, args.size, not args.no_size, args.group
+    src, dst = os.path.abspath(args.input), args.output
     if not os.path.isfile(src):
         sys.exit(f"error: {src} does not exist")
 

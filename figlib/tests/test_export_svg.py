@@ -58,8 +58,8 @@ FIXTURE = """<!doctype html>
   <text id="badge" class="muted" fill="#ffffff" x="120" y="90">1</text>
   <g id="halfg" class="half"><rect x="160" y="10" width="10" height="10" fill="#000000"/></g>
   <path id="inline" style="fill:none;stroke:#333333;stroke-dasharray:2,2" d="M60 60 L100 60"/>
-  <!-- the Fig 5A workaround shape: attributes already written, px and commas included -->
-  <circle id="workaround" class="dash" fill="none" stroke-width="1.2px"
+  <!-- styles already written as attributes, with px units and commas -->
+  <circle id="preset" class="dash" fill="none" stroke-width="1.2px"
           stroke-dasharray="4, 3" cx="180" cy="70" r="10"/>
 </svg>
 </body></html>
@@ -151,9 +151,9 @@ def test_defaults_are_not_baked(exported):
     assert plain.get("stroke") is None
 
 
-def test_fig5a_workaround_attributes_still_export(exported):
+def test_styles_already_written_as_attributes_still_export(exported):
     _, _, el = exported
-    w = el["workaround"]
+    w = el["preset"]
     assert w.get("fill") == "none"
     assert _nums(w.get("stroke-width")) == [1.2]
     assert _nums(w.get("stroke-dasharray")) == [4.0, 3.0]
