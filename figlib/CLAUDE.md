@@ -45,7 +45,12 @@ type arithmetic, export traps) and `explainer-video` (workflow and gates). The l
 de-labbed versions of Bilal's personal `scientific-figure-design` and wuhrlab's `explainer-video`
 skills, which were retired on 2026-11-18 once the plugin was installed on Argo (the originals are in
 wuhrlab `archive/claude_skills/` and git history). They are what labmates' Claude knows about figlib, so **update them when a
-public API or a usage rule changes**. No `version` is set, so installs track commits. Check with `claude plugin validate .`.
+public API or a usage rule changes**. `plugin.json` carries a `version`, so installed plugins update only on a release, in step with the
+package. Check with `claude plugin validate .`.
+
+**Releasing** (`figlib/tests/test_release.py` fails if these disagree): bump `figlib.__version__`, the
+`version` in `plugins/figlib/.claude-plugin/plugin.json`, the `@vX.Y.Z` pins in `README.md` and in the
+figlib skill's setup block; commit; `git tag -a vX.Y.Z`; push the tag.
 
 ## Things that aren't obvious from the code
 
