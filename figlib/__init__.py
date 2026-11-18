@@ -13,7 +13,7 @@
 
 from functools import lru_cache as _lru_cache
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 
 @_lru_cache(maxsize=None)
@@ -33,10 +33,13 @@ def build_id() -> str:
     if (root / ".git").exists():
         def git(*args):
             return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
-        head = git("rev-parse", "--short=7", "HEAD")
-        if head.returncode == 0:
-            dirty = git("status", "--porcelain", "--", "figlib").stdout.strip()
-            return f"{__version__}+{head.stdout.strip()}{'.dirty' if dirty else ''}"
+        try:
+            head = git("rev-parse", "--short=7", "HEAD")
+            if head.returncode == 0:
+                dirty = git("status", "--porcelain", "--", "figlib").stdout.strip()
+                return f"{__version__}+{head.stdout.strip()}{'.dirty' if dirty else ''}"
+        except OSError:   # no git, or a sandbox that won't run it (Claude Code's does not)
+            pass
     try:
         url = json.loads(metadata.distribution("figlib").read_text("direct_url.json") or "{}")
         commit = url.get("vcs_info", {}).get("commit_id")

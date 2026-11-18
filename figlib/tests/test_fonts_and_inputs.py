@@ -199,3 +199,17 @@ def test_build_id_names_the_version_and_if_known_the_commit():
     import figlib
     assert re.fullmatch(r"\d+\.\d+\.\d+(\+[0-9a-f]{7}(\.dirty)?)?", figlib.build_id()), figlib.build_id()
     assert figlib.build_id().startswith(figlib.__version__)
+
+
+def test_build_id_survives_a_git_that_cannot_run(monkeypatch):
+    """Claude Code's shell sandbox refuses to exec git; export_svg calls build_id for its stamp."""
+    import subprocess
+    import figlib
+    def refuse(*a, **k):
+        raise PermissionError(13, "Permission denied", "git")
+    figlib.build_id.cache_clear()
+    monkeypatch.setattr(subprocess, "run", refuse)
+    try:
+        assert figlib.build_id().startswith(figlib.__version__)
+    finally:
+        figlib.build_id.cache_clear()
