@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "figlib"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Figure tooling for slides and papers: layout linters, an HTML-to-SVG exporter, a CVD-checked palette, and .pptx assembly."
 readme = "README.md"
 license = "MIT AND OFL-1.1"
@@ -26,3 +26,6 @@ include = ["figlib*"]
 
 [tool.setuptools.package-data]
 figlib = ["fonts/*.ttf", "fonts/OFL.txt", "tests/*.py"]   # tests/ has no __init__.py
+
+[tool.setuptools.dynamic]
+version = {attr = "figlib.__version__"}   # one source of truth

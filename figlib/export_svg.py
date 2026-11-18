@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 
 from playwright.sync_api import sync_playwright
 
+import figlib
 from figlib import fonts as _fonts
 
 __version__ = "1.3.0"
@@ -375,7 +376,7 @@ def main(argv=None):
     # Provenance stamp. <metadata> rather than a comment: it survives Illustrator,
     # and a comment can't safely hold arbitrary text.
     stamp = (f'<metadata id="figlib-provenance">figlib.export_svg {__version__}; '
-             f'source={os.path.basename(src)}</metadata>')
+             f'figlib {figlib.build_id()}; source={os.path.basename(src)}</metadata>')
     markup = re.sub(r'(<svg\b[^>]*>)', lambda m: m.group(1) + stamp,
                     result["markup"], count=1)
     doc = '<?xml version="1.0" encoding="UTF-8"?>\n' + markup + "\n"

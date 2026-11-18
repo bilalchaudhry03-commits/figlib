@@ -191,3 +191,11 @@ def test_faces_exist_before_the_figure_script_measures_text(tmp_path):
         assert fonts.font_mismatches(page) == []
         browser.close()
     assert early == pytest.approx(carlito, rel=1e-3)
+
+
+# ------------------------------------------------------------------ provenance
+
+def test_build_id_names_the_version_and_if_known_the_commit():
+    import figlib
+    assert re.fullmatch(r"\d+\.\d+\.\d+(\+[0-9a-f]{7}(\.dirty)?)?", figlib.build_id()), figlib.build_id()
+    assert figlib.build_id().startswith(figlib.__version__)

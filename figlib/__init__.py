@@ -10,3 +10,38 @@
     anim          frames -> MP4 / GIF / poster / contact sheet
     scene, clip   explainer videos (scenes on a timeline, Manim clips)
 """
+
+from functools import lru_cache as _lru_cache
+
+__version__ = "0.1.0"
+
+
+@_lru_cache(maxsize=None)
+def build_id() -> str:
+    """The code that is running: '0.1.0+374f498', '+374f498.dirty' with uncommitted edits, or
+    just the version when the commit can't be known.
+
+    From a git checkout, asks git. From `pip install git+...`, reads the commit pip recorded in
+    direct_url.json. Stamped into every exported SVG, so a figure says which figlib made it.
+    """
+    import json
+    import subprocess
+    from importlib import metadata
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    if (root / ".git").exists():
+        def git(*args):
+            return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+        head = git("rev-parse", "--short=7", "HEAD")
+        if head.returncode == 0:
+            dirty = git("status", "--porcelain", "--", "figlib").stdout.strip()
+            return f"{__version__}+{head.stdout.strip()}{'.dirty' if dirty else ''}"
+    try:
+        url = json.loads(metadata.distribution("figlib").read_text("direct_url.json") or "{}")
+        commit = url.get("vcs_info", {}).get("commit_id")
+        if commit:
+            return f"{__version__}+{commit[:7]}"
+    except (metadata.PackageNotFoundError, ValueError):
+        pass
+    return __version__

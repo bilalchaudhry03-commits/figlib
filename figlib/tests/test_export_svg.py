@@ -6,6 +6,7 @@ Needs headless Chromium, so the export runs once per module.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -174,3 +175,11 @@ def test_outline_circle_renders_hollow(exported, tmp_path):
     img = Image.open(io.BytesIO(png)).convert("RGB")
     # viewBox 200 wide -> 2 px per unit; outline circle centre is (20, 20)
     assert img.getpixel((40, 40)) == (255, 255, 255)
+
+
+def test_provenance_stamp_names_the_exporter_and_the_figlib_build(exported):
+    import figlib
+    out, _, _ = exported
+    stamp = re.search(r'<metadata id="figlib-provenance">(.*?)</metadata>', out.read_text()).group(1)
+    assert f"figlib.export_svg {export_svg.__version__}" in stamp
+    assert f"figlib {figlib.build_id()}" in stamp and "source=fixture.html" in stamp
