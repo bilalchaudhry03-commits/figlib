@@ -9,7 +9,7 @@ for labmates); this file is for working on the code.
 
 - figlib is its own private repo, `bilalchaudhry03-commits/figlib`, shared with the Wühr lab. The
   checkout is `/Genomics/wuehrlab/People/Bilal/pkgs/figlib`; wuhrlab's `Bilal/figlib` is a symlink to
-  `pkgs/figlib/figlib`, so existing imports, `python3 -m figlib.x`, skill shims, `~/.fonts` and the
+  `pkgs/figlib/figlib`, so existing imports, `python3 -m figlib.x`, `~/.fonts` and the
   Manim bind all resolve without an install.
 - **Commit and push in `pkgs/figlib`.** wuhrlab doesn't track these files, so an edit made through
   the symlink won't show in wuhrlab's `git status`.
@@ -43,7 +43,8 @@ skills under `plugins/figlib/skills/`: `figlib` (the API and checks; `references
 `references/video.md`), `scientific-figure-design` (how to design a schematic: layout, colour roles,
 type arithmetic, export traps) and `explainer-video` (workflow and gates). The last two are the
 de-labbed versions of Bilal's personal `scientific-figure-design` and wuhrlab's `explainer-video`
-skills (2026-11-18). They are what labmates' Claude knows about figlib, so **update them when a
+skills, which were retired on 2026-11-18 once the plugin was installed on Argo (the originals are in
+wuhrlab `archive/claude_skills/` and git history). They are what labmates' Claude knows about figlib, so **update them when a
 public API or a usage rule changes**. No `version` is set, so installs track commits. Check with `claude plugin validate .`.
 
 ## Things that aren't obvious from the code
@@ -63,8 +64,8 @@ public API or a usage rule changes**. No `version` is set, so installs track com
 - Don't copy the TTFs anywhere. One copy, in the repo.
 
 **SVG export**
-- Every SVG carries `<metadata id="figlib-provenance">` with the exporter version. The skill's copies
-  of the tools are shims that delegate here; keep them code-free so nothing drifts.
+- Every SVG carries `<metadata id="figlib-provenance">` with the exporter version. Run the tools as
+  `python -m figlib.<tool>`; don't keep copies of them anywhere else (the old skill shims are gone).
 - Arrowheads are baked to paths (Illustrator/PowerPoint don't honour SVG 2 marker orientation).
   `--group` clusters loose siblings into `<g>`.
 - Computed styles are baked as attributes, `none` included (`fill`'s initial value is black). A class
