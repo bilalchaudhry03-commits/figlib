@@ -6,6 +6,11 @@ trace regex passes without the tool ever running (smoke test 13567243). The one 
 'clean — no overflow', is check_layout's own output and appears in no skill. In this sandbox Claude
 writes scripts with `cat > f.py <<EOF` in Bash rather than the Write tool, so code checks match Bash input.
 
+Known noise: `ran-figcheck` only sees Bash input, but some runs write the script with the Write tool
+(plot-csv rerun 13567359), and a grader can't say "Bash or Write". Treat a miss there with a judge PASS as
+inconclusive, not as a skipped check. With runs: 1 every score is one sample; use --runs 3 before
+drawing conclusions from a single case.
+
 LLM criteria must be checkable from Claude's final message: that is all the judge sees. Asking it
 whether the PNG has a title fails good runs (quick-bar, 2026-11-18).
 
