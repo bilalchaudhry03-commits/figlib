@@ -34,6 +34,21 @@ python -m figlib.fonts     # links the font into ~/.fonts so Chromium can find i
 
 `check_layout` and `export_svg` also do this themselves the first time they run.
 
+## Using it with Claude Code
+
+This repo is also a Claude Code plugin. Its skill teaches Claude to use figlib's checks (and rules
+like "never hide clipped data") whenever you ask it for figures, SVG exports, decks or videos.
+
+```bash
+claude plugin marketplace add bilalchaudhry03-commits/figlib
+claude plugin install figlib@figlib
+```
+
+Or inside a session: `/plugin marketplace add bilalchaudhry03-commits/figlib`, then `/plugin install figlib@figlib`.
+It uses your existing GitHub SSH key (loaded in ssh-agent) to read this private repo. Claude picks
+the skill up automatically; you can also call it with `/figlib:figlib`. To get updates:
+`claude plugin marketplace update figlib`, then `claude plugin update figlib@figlib`.
+
 ## The tools
 
 ### `figcheck`: lint a matplotlib figure before you save it

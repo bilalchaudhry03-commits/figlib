@@ -35,6 +35,13 @@ for labmates); this file is for working on the code.
 | `anim` | frames → MP4 + GIF + poster + contact sheet; `.clipped` lists frames touching the edge |
 | `scene`, `clip` | explainer videos; Manim clips rendered in Apptainer |
 
+## Claude Code plugin
+
+`.claude-plugin/marketplace.json` + `plugins/figlib/` make this repo a plugin marketplace; the skill is
+`plugins/figlib/skills/figlib/` (`SKILL.md`, plus `references/decks.md` and `references/video.md`).
+It is what labmates' Claude knows about figlib, so **update it when a public API or a usage rule
+changes**. No `version` is set, so installs track commits. Check with `claude plugin validate .`.
+
 ## Things that aren't obvious from the code
 
 **Using figcheck**
