@@ -32,13 +32,9 @@ The extras:
 - `deck` installs the `.pptx` helpers.
 - `video` installs the animation tools.
 
-**Fonts.** figlib includes Carlito, a free font with exactly the same letter widths as Calibri. With it, a layout checked on Linux is the layout PowerPoint will show. matplotlib finds it automatically. For the HTML tools, run this once per machine:
+**Fonts.** figlib includes Carlito, a free font with exactly the same letter widths as Calibri. With it, a layout checked on Linux is the layout PowerPoint will show. matplotlib finds it automatically, and `check_layout`/`export_svg` load it into the browser themselves, under the name Calibri. Nothing to set up. `check_layout` also reports any text that isn't measured in Carlito/Calibri (a FONT finding), so a layout can't silently be checked in the wrong font.
 
-```bash
-python -m figlib.fonts     # links the font into ~/.fonts so Chromium can find it
-```
-
-`check_layout` and `export_svg` also do this themselves the first time they run.
+For your own Playwright screenshot scripts, call `figlib.fonts.use_in_browser(page)` before `page.goto(...)`.
 
 ## Using it with Claude Code
 

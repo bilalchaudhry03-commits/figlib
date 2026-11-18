@@ -13,7 +13,6 @@ dropped. Use its checks instead of eyeballing a PNG.
 
 ```bash
 python -c "import figlib"            # missing? pip install "figlib[all] @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git"
-python -m figlib.fonts               # once per machine, before any HTML tool (links Carlito for Chromium)
 ```
 
 Extras: `html` (check_layout, export_svg; then `playwright install chromium`), `deck`, `video`.
@@ -49,14 +48,17 @@ fig.savefig(out)
 ## HTML+SVG figures
 
 ```bash
-python -m figlib.check_layout fig.html                  # exits 1 on overflow, overlap, small type, missing glyph
+python -m figlib.check_layout fig.html                  # exits 1 on overflow, overlap, small type, missing glyph, FONT
 python -m figlib.export_svg fig.html fig.svg --group    # standalone SVG for PowerPoint/Illustrator
 ```
 
 Run `check_layout` first and fix everything it reports before exporting. The exporter writes colours,
 fonts and styles into the SVG, gives it a slide-fitted size, turns arrowheads into plain shapes,
 and stamps its version in `<metadata id="figlib-provenance">`. Declare the font stack as
-`Calibri, Arial, Helvetica, sans-serif` (`figlib.fonts.STACK`).
+`Calibri, Arial, Helvetica, sans-serif` (`figlib.fonts.STACK`). Both tools load Carlito into the page
+as 'Calibri' on any OS; a FONT finding means some text uses another face, so its measurements
+don't describe the slide. For your own Playwright screenshots, call `fonts.use_in_browser(page)`
+before `goto`.
 
 ## Colour
 

@@ -59,8 +59,15 @@ public API or a usage rule changes**. No `version` is set, so installs track com
 - Calibri isn't on the cluster; DejaVu (the fallback) is ~25% wider, so layouts checked against it
   don't hold. Carlito is metric-compatible and fontconfig maps Calibri → Carlito, so declared stacks
   stay as they are. PNGs rendered here use Carlito; the SVG is the authority.
-- A fresh machine needs `python -m figlib.fonts` once (or just run `check_layout`/`export_svg`).
-  Importing `figlib.fonts` only registers with matplotlib — it never touches `~/.fonts`.
+- `check_layout`/`export_svg` call `fonts.use_in_browser(page)` before `goto`: an init script registers
+  the TTFs via the FontFace API from in-memory bytes as 'Calibri' and 'Carlito', so they exist before the
+  figure's own script measures text (tested: parse-time width = Carlito width) and it works on any OS.
+  A stylesheet added after load is too late; ~/.fonts only works where Chromium uses fontconfig. Since
+  2026-11-18 (exporter 1.3.0, check_layout 1.2.0); before that the tools symlinked ~/.fonts, which
+  would have crashed on Windows and been ignored on macOS. `check_layout` then measures each distinct
+  text style against Carlito and reports FONT if any differs by > 0.5%.
+- `python -m figlib.fonts` (the ~/.fonts link) is now optional, for other Chromium use on Linux.
+  Importing `figlib.fonts` only registers with matplotlib.
 - Don't copy the TTFs anywhere. One copy, in the repo.
 
 **SVG export**

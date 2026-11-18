@@ -143,3 +143,51 @@ def test_glyph_gap_check_finds_characters_the_deck_font_lacks():
 def test_glyph_gap_check_passes_plain_text():
     from figlib.check_layout import glyph_gaps
     assert glyph_gaps([{"text": "Cytoplasm"}, {"text": "carried in"}]) == []
+
+
+# ------------------------------------------------- fonts inside headless Chromium
+
+FIG = """<!doctype html><svg viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg">
+<text x="200" y="300" style="font-family: {family}; font-size: 40px">Cytoplasm to nucleus</text>
+</svg><script>window.early = document.querySelector('text').getComputedTextLength();</script>"""
+
+
+def _check_layout(tmp_path, family):
+    pytest.importorskip("playwright")
+    html = tmp_path / "fig.html"
+    html.write_text(FIG.format(family=family))
+    home = tmp_path / "home"            # no ~/.fonts: the tool must bring its own font
+    home.mkdir()
+    env = {**__import__("os").environ, "HOME": str(home)}
+    return subprocess.run([sys.executable, "-m", "figlib.check_layout", str(html)],
+                          capture_output=True, text=True, cwd=REPO, env=env)
+
+
+def test_check_layout_measures_in_carlito_without_a_fonts_dir(tmp_path):
+    r = _check_layout(tmp_path, fonts.STACK)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "measured in Carlito" in r.stdout
+
+
+def test_check_layout_flags_a_figure_laid_out_in_another_face(tmp_path):
+    r = _check_layout(tmp_path, "'DejaVu Sans'")
+    assert r.returncode == 1 and "FONT" in r.stdout, r.stdout + r.stderr
+
+
+def test_faces_exist_before_the_figure_script_measures_text(tmp_path):
+    """A figure's own layout script runs during parsing; it must already see Carlito."""
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    html = tmp_path / "fig.html"
+    html.write_text(FIG.format(family=fonts.STACK))
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        fonts.use_in_browser(page)
+        page.goto(html.as_uri())
+        early = page.evaluate("window.early")
+        carlito = page.evaluate("""() => { const t = document.querySelector('text');
+            t.style.fontFamily = 'Carlito'; return t.getComputedTextLength(); }""")
+        assert fonts.font_mismatches(page) == []
+        browser.close()
+    assert early == pytest.approx(carlito, rel=1e-3)

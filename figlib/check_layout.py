@@ -8,6 +8,8 @@ Checks, in headless Chromium:
   OVERLAP     two text elements intersect (loose tolerances; see OVERLAP_MIN_*)
   SMALL TYPE  text renders below --min-pt once the figure is fitted to a slide
   MISSING GLYPH  a character the deck font (Carlito/Calibri) can't draw
+  FONT        a text style that doesn't render with Calibri/Carlito metrics, so the
+              layout was measured in a face PowerPoint won't use
 
 Text over shapes is not checked: most labels sit on a panel rect by design.
 Exits 1 on any finding, so it can gate an export.
@@ -23,7 +25,7 @@ from playwright.sync_api import sync_playwright
 
 from figlib import fonts as _fonts
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # An intersection must be at least this many viewBox units in BOTH axes, and
 # cover at least this fraction of the smaller box, before it counts. Loose on
@@ -74,13 +76,14 @@ PROBE = """() => {
 
 def probe(html: Path, wait_ms: int) -> dict:
     url = html.resolve().as_uri()
-    _fonts.ensure_visible()   # so Chromium measures Carlito, not a wider fallback
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         page = browser.new_page(viewport={"width": 1700, "height": 1000})
+        _fonts.use_in_browser(page)   # Carlito as 'Calibri', before the figure's script runs
         page.goto(url)
         page.wait_for_timeout(wait_ms)
         data = page.evaluate(PROBE)
+        data["font"] = _fonts.font_mismatches(page)
         browser.close()
     return data
 
@@ -194,6 +197,14 @@ def main() -> int:
         fails.append({"kind": "MISSING GLYPH", "text": f"{ch}  (U+{code:04X})",
                       "detail": f"not in {FONT_CHECK.name}; appears in: {where}"})
 
+    # --- FONT ------------------------------------------------------------------
+    # Everything above was measured in whatever face Chromium used; if that isn't
+    # Carlito/Calibri, the measurements don't describe the slide.
+    for r in d["font"]:
+        fails.append({"kind": "FONT", "text": f"{r['family']} ({r['weight']}, {r['style']})",
+                      "detail": f"renders {100 * (r['ratio'] - 1):+.0f}% vs Calibri/Carlito, "
+                                f"e.g. {r['sample']!r}; declare figlib.fonts.STACK"})
+
     if a.json:
         print(json.dumps({"file": str(a.html), "viewBox": [vbw, vbh],
                           "scale_pt_per_unit": scale, "n_text": len(texts),
@@ -209,9 +220,9 @@ def main() -> int:
               "SMALLER; cut content or split the figure instead.")
     if not fails:
         print(f"  clean — no overflow, no text collisions, nothing below "
-              f"{a.min_pt:g}pt, every glyph in the font")
+              f"{a.min_pt:g}pt, every glyph in the font, measured in Carlito")
         return 0
-    for kind in ("OVERFLOW", "OVERLAP", "SMALL TYPE", "MISSING GLYPH"):
+    for kind in ("OVERFLOW", "OVERLAP", "SMALL TYPE", "MISSING GLYPH", "FONT"):
         rows = [f for f in fails if f["kind"] == kind]
         if not rows:
             continue

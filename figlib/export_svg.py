@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 
 from figlib import fonts as _fonts
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 DEFAULT_SLIDE = (13.333, 7.5)   # PowerPoint 16:9 widescreen, inches
 
@@ -363,10 +363,10 @@ def main(argv=None):
         "forceH": force[1] if force else None,
     }
 
-    _fonts.ensure_visible()   # so Chromium measures Carlito, not a wider fallback
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
+        _fonts.use_in_browser(page)   # Carlito as 'Calibri', before the figure's script runs
         page.goto(f"file://{src}")
         page.wait_for_load_state("networkidle")
         result = page.evaluate(RESOLVE_JS, opts)
