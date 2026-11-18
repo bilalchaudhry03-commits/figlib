@@ -82,6 +82,9 @@ colours — use them only to match those figures.
 
 ## More
 
+- Starting a new figure: copy `examples/schematic_template.html` (HTML+SVG schematic) or
+  `examples/figcheck_example.py` (matplotlib) from the figlib repo; both pass the checks as they are.
+
 - Designing a schematic or diagram (layout, colour roles, type sizing, export traps): use the
   `scientific-figure-design` skill.
 - Making an explainer video (workflow, model checks, content rules): use the `explainer-video` skill.

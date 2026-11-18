@@ -54,6 +54,18 @@ It uses your existing GitHub SSH key (loaded in ssh-agent) to read this private 
 the skills up automatically; you can also call one directly, e.g. `/figlib:figlib`. To get updates:
 `claude plugin marketplace update figlib`, then `claude plugin update figlib@figlib`.
 
+## Starting points
+
+Copy one of these rather than starting from a blank file. Both pass figlib's checks as they are.
+
+- [`examples/schematic_template.html`](examples/schematic_template.html): an HTML+SVG slide
+  schematic (a three-step flow) already set up for a 16:9 slide: font stack, palette colours,
+  text sized for projection, boxes sized to their labels by script, an arrowhead that exports
+  correctly. Edit the `STEPS` list, then `check_layout` and `export_svg` it.
+- [`examples/figcheck_example.py`](examples/figcheck_example.py): a matplotlib figure with the
+  font stack, palette colours, a hand-set axis limit with the plotted-vs-available count printed,
+  and `figcheck.require(fig)` before saving.
+
 ## The tools
 
 ### `figcheck`: lint a matplotlib figure before you save it
