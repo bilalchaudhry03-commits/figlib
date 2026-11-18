@@ -19,16 +19,11 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
-__version__ = "1.2.0"
-
 from playwright.sync_api import sync_playwright
 
-# Register the vendored Carlito with matplotlib (on import) and symlink it where
-# fontconfig will find it (explicitly, since 2026-11-17), so headless Chromium
-# measures the face the deck actually declares instead of a fallback 20% wider.
 from figlib import fonts as _fonts
-_fonts.ensure_visible()
 
+__version__ = "1.2.0"
 
 DEFAULT_SLIDE = (13.333, 7.5)   # PowerPoint 16:9 widescreen, inches
 
@@ -45,21 +40,12 @@ RESOLVE_JS = """
   const PAINTS = new Set(['text', 'tspan', 'rect', 'circle', 'ellipse',
                           'path', 'line', 'polyline', 'polygon', 'stop']);
 
-  // --- geometry / opacity properties (1.2.0, 2026-10-19) -------------------
-  // Up to 1.1.0 only the COLOURS above were baked, and a computed `none` was
-  // skipped as "nothing to write". Both were wrong for a standalone file: the
-  // page's <style> does not travel with outerHTML, so whatever a class rule or
-  // inline style set is gone unless it becomes an attribute -- and `fill` has
-  // an initial value of BLACK, so a dropped `fill:none` is not "nothing", it is
-  // a solid black shape (generals Fig 5A: every outline-only oocyte circle).
-  // Class-set stroke-width reverted to 1 and dasharrays to solid the same way.
-  //
-  // Rule: bake a property iff the browser's computed value differs from what
-  // the STANDALONE file would give that element without the attribute -- i.e.
-  // the value inherited from ancestors' attributes in the export (tracked
-  // top-down in `inh`), or the initial value for non-inherited `opacity`.
-  // That writes every value that would otherwise be lost and nothing that is
-  // already implied, so all-default shapes gain no attributes.
+  // --- geometry / opacity -------------------------------------------------
+  // The page's <style> doesn't travel with outerHTML, so anything a class rule or
+  // inline style set is lost unless it becomes an attribute. Bake a property iff
+  // its computed value differs from what the standalone file would give the
+  // element anyway: the value inherited from ancestors' attributes (tracked in
+  // `inh`), or the initial value for non-inherited `opacity`.
   const INITIAL = {'fill': 'rgb(0, 0, 0)', 'stroke': 'none',
                    'stroke-width': '1', 'stroke-dasharray': 'none',
                    'stroke-dashoffset': '0', 'stroke-linecap': 'butt',
@@ -68,8 +54,8 @@ RESOLVE_JS = """
   const GEOM = ['stroke-width', 'stroke-dasharray', 'stroke-dashoffset',
                 'stroke-linecap', 'stroke-linejoin', 'fill-opacity',
                 'stroke-opacity'];
-  // opacity does not inherit, and on a <g> it is group compositing, so unlike
-  // fill it is safe -- and needed -- to bake on groups too.
+  // opacity doesn't inherit (on a <g> it's group compositing), so it's safe to
+  // bake on groups too.
   const OPACITY_ON = new Set([...PAINTS, 'g']);
   OPACITY_ON.delete('stop');
 
@@ -92,10 +78,9 @@ RESOLVE_JS = """
     if (attr === 'stroke-linejoin') return cur === 'bevel' ? 'round' : 'bevel';
     return SENTINEL[attr];
   };
-  // An authored presentation attribute LOSES to any CSS rule in the browser,
-  // so `<line stroke-width="2" class="thin">` is drawn at the class width on
-  // screen and at 2 in the export. Probe: if changing the attribute does not change the
-  // computed value, CSS is in control and the computed value must be baked.
+  // A presentation attribute loses to any CSS rule in the browser. Probe: if
+  // changing the attribute doesn't change the computed value, CSS is in control
+  // and the computed value must be baked.
   const cssOverrides = (el, attr, cur) => {
     const raw = el.getAttribute(attr);
     el.setAttribute(attr, sentinel(attr, cur));
@@ -117,22 +102,18 @@ RESOLVE_JS = """
         if (resolved) el.setAttribute(attr, resolved.trim());
       } else if (!raw && paints && !inDefs &&
                  (attr !== 'stop-color' || tag === 'stop')) {
-        // Paint came from a CSS rule in the page's <style>, which does NOT
-        // travel with svg.outerHTML -- without this the element falls back to
-        // black on import (white-on-dark labels vanish, greys flatten to black).
+        // Paint came from a CSS rule, which doesn't travel with outerHTML;
+        // without this the element imports black.
         const resolved = (computed.getPropertyValue(attr) || '').trim();
         if (resolved && resolved !== 'none') el.setAttribute(attr, resolved);
         // `none` is a value, not an absence: fill's initial value is black.
         else if (resolved === 'none' && attr !== 'stop-color' && inh[attr] !== 'none')
           el.setAttribute(attr, 'none');
       } else if (raw && paints && !inDefs && attr !== 'stop-color' && raw.trim() !== 'none') {
-        // An authored COLOUR that a class rule turns into `none` (an outline
-        // class on a shape built with a fill attribute) must become none.
-        // An authored colour that a class rule merely RECOLOURS is left alone,
-        // deliberately: that is pre-1.2.0 behaviour, and in the deck the
-        // authored attribute is the intended colour (white numerals on a dark
-        // badge that a `.tag{fill:muted}` rule greys out on screen) -- see
-        // figlib/CLAUDE.md. Geometry below has no such history and follows CSS.
+        // An authored colour that a class rule turns into `none` becomes none.
+        // One that a class rule merely recolours is deliberately kept: the
+        // authored attribute is treated as the intended colour. (Geometry below
+        // follows CSS.)
         const resolved = (computed.getPropertyValue(attr) || '').trim();
         if (resolved === 'none') el.setAttribute(attr, 'none');
       }
@@ -174,9 +155,8 @@ RESOLVE_JS = """
     t.setAttribute('font-weight', computed.fontWeight);
   });
 
-  // --- XML comments may not contain a double hyphen -----------------------
-  // Collapse runs of 2+ hyphens rather than dropping the comment, so authoring
-  // notes survive into the deliverable.
+  // --- XML comments may not contain `--` ----------------------------------
+  // Collapse runs of hyphens rather than dropping the comment.
   let commentsFixed = 0;
   const walker = document.createTreeWalker(svg, NodeFilter.SHOW_COMMENT);
   const comments = [];
@@ -189,24 +169,14 @@ RESOLVE_JS = """
 
 
   // --- bake <marker> arrowheads into plain geometry ------------------------
-  // Illustrator and PowerPoint render SVG 1.1. Two consequences, and BOTH make
-  // an arrowhead come out as a bare triangle:
-  //   * orient="auto-start-reverse" is SVG 2. In 1.1 it is an invalid value, so
-  //     it falls back to no rotation -- every arrowhead is drawn in its authored
-  //     orientation no matter which way its line runs.
-  //   * markerUnits defaults to "strokeWidth" and is widely ignored, so the
-  //     head also comes out the wrong size.
-  // Replacing each marker with an explicit, already-positioned and already-
-  // rotated path removes both failure modes: the deliverable then contains only
-  // primitives every consumer supports. Geometry comes from the live DOM
-  // (getPointAtLength), so curved paths are handled as exactly as straight ones.
+  // Illustrator and PowerPoint are SVG 1.1: orient="auto-start-reverse" (SVG 2)
+  // falls back to no rotation, and markerUnits is widely ignored, so heads come
+  // out unrotated and mis-sized. Replace each marker with an explicitly placed
+  // copy, using getPointAtLength so curved paths work too.
   let markersBaked = 0, markersSkipped = 0;
   const SVGNS = 'http://www.w3.org/2000/svg';
-  // Walk GEOMETRY elements and read the COMPUTED marker properties, rather than
-  // scanning for the marker-* attribute. Marker properties inherit, so an author
-  // may set marker-end once on a <g> and have every child arrow pick it up -- and
-  // a <g> has no getTotalLength, so an attribute scan skips it and silently leaves
-  // those arrowheads as markers. One figure here does exactly that.
+  // Read the COMPUTED marker properties of geometry elements: marker-* inherits,
+  // so a marker-end set once on a <g> must still be found on each child.
   const markered = Array.from(svg.querySelectorAll('path,line,polyline,polygon'));
   for (const el of markered) {
     const cs0 = getComputedStyle(el);
@@ -225,10 +195,8 @@ RESOLVE_JS = """
       const ref = wanted[pos];
       if (!ref || ref === 'none') continue;
       el.setAttribute('marker-' + pos, 'none');   // override any inherited value
-      // getComputedStyle returns url("#id") WITH quotes; the attribute form has
-      // none. Strip both, or the id carries a trailing quote and querySelector
-      // throws on an invalid selector.
-      const id = (ref.match(/url\(\s*["']?#([^"'()\s]+)["']?\s*\)/) || [])[1];
+      // The computed form is url("#id") with quotes, the attribute form without.
+      const id = (ref.match(/url\\(\\s*["']?#([^"'()\\s]+)["']?\\s*\\)/) || [])[1];
       const mk = id && svg.querySelector('marker[id="' + id + '"]');
       if (!mk) { markersSkipped++; continue; }
 
@@ -252,14 +220,11 @@ RESOLVE_JS = """
       const mH = parseFloat(mk.getAttribute('markerHeight') || '3');
       // markerUnits: strokeWidth (the default) scales the head by the stroke.
       const unit = (mk.getAttribute('markerUnits') || 'strokeWidth') === 'userSpaceOnUse' ? 1 : sw;
-      // A marker WITHOUT a viewBox is not scaled to markerWidth/markerHeight -- those
-      // only size the clip viewport, and the content is used at its natural scale.
-      // Treating a missing viewBox as "0 0 10 10" applies a markerWidth/10 scale that
-      // does not exist, which silently resized every arrowhead in the eight figures
-      // here whose markers omit it. Only a marker that HAS a viewBox gets that mapping.
+      // Without a viewBox, markerWidth/Height only size the clip viewport; the
+      // content is used at its natural scale. Only a viewBox maps it to them.
       let sx, sy;
       if (mk.hasAttribute('viewBox')) {
-        const vb = mk.getAttribute('viewBox').trim().split(/[\s,]+/).map(Number);
+        const vb = mk.getAttribute('viewBox').trim().split(/[\\s,]+/).map(Number);
         sx = unit * (mW / (vb[2] || 10));
         sy = unit * (mH / (vb[3] || 10));
       } else {
@@ -275,15 +240,12 @@ RESOLVE_JS = """
         'scale(' + sx + ',' + sy + ') ' +
         'translate(' + (-refX) + ',' + (-refY) + ')');
       for (const child of Array.from(mk.children)) g.appendChild(child.cloneNode(true));
-      // Insert AFTER the stroked element so the head paints over the line, which
-      // is what the browser does and what the author saw.
+      // Insert after the stroked element so the head paints over the line.
       el.parentNode.insertBefore(g, el.nextSibling);
       markersBaked++;
     }
   }
-  // Every arrowhead is now explicit geometry, so the marker plumbing is dead
-  // weight -- and leaving a marker-* attribute behind would make a consumer draw
-  // the head a second time, on top of the baked one.
+  // Remove the marker plumbing, or a consumer would draw each head twice.
   if (markersBaked && !markersSkipped) {
     for (const el of Array.from(svg.querySelectorAll(
            '[marker-start],[marker-end],[marker-mid]'))) {
@@ -296,25 +258,16 @@ RESOLVE_JS = """
 
 
   // --- optional: cluster loose siblings into <g> for Illustrator ----------
-  // These figures build their content by appending every shape and label to one
-  // container, so the export is a flat pile of 100+ siblings. Illustrator opens
-  // that as 100+ top-level objects: moving "the box and its caption" means
-  // rubber-band selecting them every time.
-  //
-  // Grouping is by PROXIMITY among CONTIGUOUS siblings only. Contiguity matters:
-  // reordering would change paint order and therefore the picture. Proximity is
-  // a heuristic -- it reliably catches a shape and the label sitting on it, and
-  // it will occasionally group two things that are merely adjacent. That is why
-  // this is opt-in rather than always-on.
+  // A flat pile of 100+ siblings opens in Illustrator as 100+ top-level objects.
+  // Group by proximity among contiguous siblings only (reordering would change
+  // paint order). Proximity is a heuristic, hence opt-in.
   let clusters = 0;
   if (opts.group) {
     const boxOf = (el) => { try { const b = el.getBBox();
         return (b.width || b.height) ? b : null; } catch (e) { return null; } };
     const vb = svg.viewBox.baseVal;
     const gap = 0.035 * Math.hypot(vb.width || 1000, vb.height || 1000);
-    // querySelectorAll searches DESCENDANTS, so the root <svg> is not in its own
-    // result set -- and on these figures the flat pile of siblings lives exactly
-    // there. Omitting it made this a no-op on precisely the files it is for.
+    // querySelectorAll excludes the root <svg>, which is where the pile usually is.
     for (const parent of [svg, ...Array.from(svg.querySelectorAll('g'))]) {
       const kids = Array.from(parent.children).filter(
         k => !/^(defs|marker|clipPath|metadata|title|desc|style)$/i.test(k.tagName));
@@ -335,11 +288,8 @@ RESOLVE_JS = """
         if (!b) { flush(); continue; }
         const box = {x1: b.x, y1: b.y, x2: b.x + b.width, y2: b.y + b.height};
         if (runBox === null) { run = [k]; runBox = box; continue; }
-        // Chain off the PREVIOUS element, not the running union. The union grows
-        // monotonically, so after a handful of elements it spans the figure and
-        // every remaining one is trivially "near" it -- which produced exactly
-        // one all-encompassing cluster at every threshold tried, i.e. no
-        // grouping at all wearing the costume of grouping.
+        // Chain off the previous element, not the running union: the union soon
+        // spans the figure and swallows everything into one cluster.
         const dx = Math.max(0, Math.max(runBox.x1 - box.x2, box.x1 - runBox.x2));
         const dy = Math.max(0, Math.max(runBox.y1 - box.y2, box.y1 - runBox.y2));
         if (Math.hypot(dx, dy) <= gap) { run.push(k); runBox = box; }
@@ -403,9 +353,6 @@ def main():
         if a == "--no-size":
             emit_size = False
         elif a == "--group":
-            # Opt-in: proximity grouping is a heuristic and will occasionally
-            # bracket two things that are merely adjacent. Worth it on a figure
-            # that exports as a flat pile; not worth imposing on every figure.
             group = True
         elif a == "--slide":
             i += 1
@@ -421,7 +368,7 @@ def main():
 
     if len(positional) != 2:
         sys.exit(f"usage: {sys.argv[0]} input.html output.svg [--slide WxH] "
-                 f"[--size WxH] [--no-size]")
+                 f"[--size WxH] [--no-size] [--group]")
 
     src = os.path.abspath(positional[0])
     dst = positional[1]
@@ -436,6 +383,7 @@ def main():
         "forceH": force[1] if force else None,
     }
 
+    _fonts.ensure_visible()   # so Chromium measures Carlito, not a wider fallback
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
@@ -444,18 +392,15 @@ def main():
         result = page.evaluate(RESOLVE_JS, opts)
         browser.close()
 
-    # Provenance stamp. <metadata> is standard SVG, ignored by renderers, and
-    # survives Illustrator. Deliberately NOT an XML comment: a comment may not
-    # contain a double hyphen and a version string is a bad place to find out.
+    # Provenance stamp. <metadata> rather than a comment: it survives Illustrator,
+    # and a comment can't safely hold arbitrary text.
     stamp = (f'<metadata id="figlib-provenance">figlib.export_svg {__version__}; '
              f'source={os.path.basename(src)}</metadata>')
     markup = re.sub(r'(<svg\b[^>]*>)', lambda m: m.group(1) + stamp,
                     result["markup"], count=1)
     doc = '<?xml version="1.0" encoding="UTF-8"?>\n' + markup + "\n"
 
-    # Parse before writing. A file that is not well-formed XML is rejected
-    # outright by Illustrator and PowerPoint, and no colour/font check can see
-    # it -- this is the only guard that catches that class of defect.
+    # Parse before writing: Illustrator and PowerPoint reject malformed XML outright.
     try:
         ET.fromstring(doc)
     except ET.ParseError as exc:

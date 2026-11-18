@@ -7,6 +7,7 @@ Checks, in headless Chromium:
   OVERFLOW    text crosses the page margin or leaves the viewBox
   OVERLAP     two text elements intersect (loose tolerances; see OVERLAP_MIN_*)
   SMALL TYPE  text renders below --min-pt once the figure is fitted to a slide
+  MISSING GLYPH  a character the deck font (Carlito/Calibri) can't draw
 
 Text over shapes is not checked: most labels sit on a panel rect by design.
 Exits 1 on any finding, so it can gate an export.
@@ -17,40 +18,30 @@ import argparse
 import json
 import os
 import sys
-
-__version__ = "1.1.0"
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-# Register the vendored Carlito with matplotlib (on import) and symlink it where
-# fontconfig will find it (explicitly, since 2026-11-17), so headless Chromium
-# measures the face the deck actually declares instead of a fallback 20% wider.
 from figlib import fonts as _fonts
-_fonts.ensure_visible()
 
+__version__ = "1.1.0"
 
 # An intersection must be at least this many viewBox units in BOTH axes, and
-# cover at least this fraction of the smaller box, before it counts. Tuned so
-# the 2026-08-05 deck's manually laid-out paragraph blocks pass clean.
+# cover at least this fraction of the smaller box, before it counts. Loose on
+# purpose, so tightly set paragraph lines pass.
 OVERLAP_MIN_UNITS = 3.0
 OVERLAP_MIN_FRAC = 0.10
 
-# Text authored AT the margin measures a fraction of a unit outside it. Without
-# this every left-aligned title in the deck reports as an overflow.
+# Text authored exactly at the margin measures a fraction of a unit outside it.
 EPS = 0.5
 
 #: How many SMALL TYPE rows to print before collapsing to a count.
 SHOW_SMALL = 8
 
-# getBBox() reports the element's OWN user space, NOT the root viewBox space, so
-# anything inside a transformed <g> comes back in the wrong coordinate system.
-# Caught 2026-08-05 by running this across 22 deck figures: the ones built with
-# group transforms reported labels at negative x and produced both false
-# overflows and false overlaps. Every box is therefore pushed through
-# root.getScreenCTM().inverse() * el.getScreenCTM(), which is the element-to-root
-# user-space matrix, and font size is scaled by sqrt(|det|) so a scaled group's
-# type is measured as rendered rather than as authored.
+# getBBox() is in the element's own user space, not the root viewBox, so text in
+# a transformed <g> comes back in the wrong coordinates. Each box goes through
+# root.getScreenCTM().inverse() * el.getScreenCTM() (element -> root), and font
+# size is scaled by sqrt(|det|) so scaled type is measured as rendered.
 PROBE = """() => {
   const svg = document.querySelector('svg');
   const vb = svg.viewBox.baseVal;
@@ -84,6 +75,7 @@ PROBE = """() => {
 
 def probe(html: Path, wait_ms: int) -> dict:
     url = html.resolve().as_uri()
+    _fonts.ensure_visible()   # so Chromium measures Carlito, not a wider fallback
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         page = browser.new_page(viewport={"width": 1700, "height": 1000})
@@ -106,19 +98,16 @@ def overlap(a: dict, b: dict) -> tuple[float, float, float] | None:
     return iw, ih, frac
 
 
-
-#: The face the deliverable is actually rendered in. Carlito is metric-compatible
-#: with Calibri AND has the same coverage gaps, so checking against it is checking
-#: against what the audience's Calibri will do.
+#: Carlito has Calibri's metrics and the same coverage gaps, so its cmap stands in
+#: for what the audience's Calibri can draw.
 FONT_CHECK = Path(__file__).resolve().parent / "fonts" / "Carlito-Regular.ttf"
 
 
 def glyph_gaps(texts):
     """Characters used in the figure that the deck's font cannot draw.
 
-    Returns (char, codepoint, sample-context) triples. Silent no-op if fontTools
-    or the font is unavailable -- a missing linter dependency should not block an
-    export.
+    Returns (char, codepoint, sample-context) triples; [] if fontTools or the font
+    is unavailable, so a missing optional dependency never blocks an export.
     """
     try:
         from fontTools.ttLib import TTFont
@@ -142,16 +131,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("html", type=Path)
     ap.add_argument("--margin", type=float, default=40.0,
-                    help="page margin in viewBox units (default 40). This is a "
-                         "house convention, not a property of the file — set it "
-                         "to whatever the deck actually uses. Any value above "
-                         "~20 catches the failure this exists for: a title that "
-                         "runs off the right edge of a wide viewBox.")
+                    help="page margin in viewBox units (default 40); set it to "
+                         "whatever your deck uses")
     ap.add_argument("--slide", default="13.333x7.5",
                     help="target slide size in inches (default 13.333x7.5)")
     ap.add_argument("--min-pt", type=float, default=9.0,
-                    help="minimum rendered point size (default 9; the skill "
-                         "recommends aiming for 11 on body text)")
+                    help="minimum rendered point size (default 9; aim for 11 "
+                         "on body text)")
     ap.add_argument("--wait", type=int, default=500,
                     help="ms to wait for the page's own layout script")
     ap.add_argument("--json", action="store_true")
@@ -202,12 +188,8 @@ def main() -> int:
                                 f"below {a.min_pt:g}pt"})
 
     # --- MISSING GLYPH -------------------------------------------------------
-    # A font substitution hides a missing glyph as readily as it hides a metric
-    # error. Slide 28 shipped four tofu boxes because U+2713/U+2717 are absent
-    # from Calibri -- they live in Segoe UI Symbol on Windows -- and DejaVu was
-    # standing in on the build machine, so they rendered here and would not have
-    # rendered for the audience. Checking the declared font's cmap catches that
-    # with no render at all.
+    # A fallback font can render a glyph Calibri lacks (e.g. U+2713 check marks),
+    # so check the deck font's cmap rather than trusting the render.
     missing = glyph_gaps(texts)
     for ch, code, where in missing:
         fails.append({"kind": "MISSING GLYPH", "text": f"{ch}  (U+{code:04X})",
@@ -224,8 +206,8 @@ def main() -> int:
           f"fits slide {fit} at {scale:.3f} pt/unit")
     if fit == "HEIGHT":
         print("  NOTE: taller than the slide, so it is sized to height. Raising "
-              "font sizes here can make rendered type SMALLER (see SKILL.md); "
-              "cut content or split the figure instead.")
+              "font sizes here can make the viewBox taller and rendered type "
+              "SMALLER; cut content or split the figure instead.")
     if not fails:
         print(f"  clean — no overflow, no text collisions, nothing below "
               f"{a.min_pt:g}pt, every glyph in the font")

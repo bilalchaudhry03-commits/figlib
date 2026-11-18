@@ -20,7 +20,9 @@ from pathlib import Path
 import imageio_ffmpeg
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]          # the directory holding the figlib package
+# The directory holding the figlib package; bound into the container and put on PYTHONPATH
+# so Manim scene files can import figlib.palette.
+ROOT = Path(__file__).resolve().parents[1]
 # The Wuhr lab's Manim image on Argo; set FIGLIB_MANIM_SIF to use another.
 SIF = Path(os.environ.get("FIGLIB_MANIM_SIF", "/Genomics/wuehrlab/People/Bilal/envs/manim/manim.sif"))
 QUALITY = {"draft": ("960,540", 15), "final": ("1920,1080", 30)}

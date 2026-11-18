@@ -46,8 +46,8 @@ def _rgb(frame) -> np.ndarray:
 def touches_edge(a: np.ndarray, bg=(255, 255, 255), tol: int = 24) -> bool:
     """True if any non-background pixel sits on the frame border.
 
-    The animation analogue of figcheck's CLIPPED: a molecule cut off by the camera is
-    invisible in review -- you cannot see the part that was never drawn -- so count it.
+    The animation analogue of figcheck's CLIPPED: content cut off by the camera is
+    invisible in review, so it has to be counted.
     """
     edge = np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]]).astype(int)
     return bool((np.abs(edge - np.array(bg)).max(axis=1) > tol).any())

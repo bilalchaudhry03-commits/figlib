@@ -130,10 +130,8 @@ def test_class_stroke_width_beats_width_attribute(exported):
 
 
 def test_authored_colour_recoloured_by_class_is_kept(exported):
-    """Pre-1.2.0 colour behaviour, kept on purpose: deck figures author white
-    numerals on dark badges whose `.tag` class greys them on screen; the
-    attribute is the intent. Only a class that turns the paint to `none`
-    overrides an authored colour."""
+    """An authored colour attribute is the intent when a class merely recolours it;
+    only a class that turns the paint to `none` overrides it."""
     _, _, el = exported
     assert el["badge"].get("fill") == "#ffffff"
 
@@ -167,8 +165,7 @@ def test_provenance_stamp_names_this_version(exported):
 
 
 def test_outline_circle_renders_hollow(exported, tmp_path):
-    """End to end, the way the bug was seen: render the SVG without its page
-    and look at the middle of the outline-only circle. Black there is the bug."""
+    """Render the SVG without its page: the outline-only circle must be hollow, not black."""
     cairosvg = pytest.importorskip("cairosvg")
     import io
     from PIL import Image

@@ -15,20 +15,15 @@ from pathlib import Path
 
 
 class MissingInput(FileNotFoundError):
-    """Raised when a declared input is absent. Subclasses FileNotFoundError so
-    an existing `except FileNotFoundError` still catches it."""
+    """A declared input is absent. Still caught by `except FileNotFoundError`."""
 
 
 def require(*paths, why: str = "", exit_code: int | None = 2) -> list[Path]:
-    """Assert every path exists. Report ALL missing ones, not just the first.
+    """Check every path exists, reporting all the missing ones, not just the first.
 
-    `why` is one line about what the data is and what produced it -- the thing
-    a reader needs and a bare path never carries.
-
-    With `exit_code` set (the default) this exits the process with a clean
-    message rather than a traceback, because a missing input is an environment
-    problem and a traceback buries that in stack frames. Pass `exit_code=None`
-    to raise `MissingInput` instead, which is what tests want.
+    `why` says what the data is and what produced it. By default a missing input
+    exits with a clean message instead of a traceback; pass `exit_code=None` to
+    raise `MissingInput` instead (e.g. in tests).
     """
     resolved = [Path(p) for p in paths]
     missing = [p for p in resolved if not p.exists()]

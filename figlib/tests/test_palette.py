@@ -1,16 +1,15 @@
 """Tests for palette: the registry stays CVD-valid, and `test_no_new_entity_colour_drift`
 fails on any entity-colour divergence not already in KNOWN_DIVERGENCES.
 """
+import os
+import re
 import sys
 from pathlib import Path
 
-import os
-import re
-
 import pytest
 
-KARYOPPI = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(KARYOPPI.parent))
+ROOT = Path(__file__).resolve().parents[2]   # holds the figlib package; lets pytest run uninstalled
+sys.path.insert(0, str(ROOT))
 
 from figlib import palette as pal  # noqa: E402
 
@@ -18,26 +17,15 @@ PLOTTING = Path(pal.default_plotting_dir())
 
 
 def test_validator_reproduces_the_documented_reference_values():
-    """The port must agree with the dataviz skill's own palette.md before any
-    number it produces is believed.
-
-    `node` is unavailable on Argo, so this validator cannot be diffed against
-    the JS by running both. Reproducing the four documented values is the
-    substitute, and it is the reason this module exists rather than a third
-    hand-port to scratch.
-    """
+    """The Python port reproduces the values palette.md documents for the JS
+    validator, which is how the port is trusted without running the JS."""
     ok, lines = pal.validate_reference()
     assert ok, "validator does not reproduce palette.md:\n" + "\n".join(lines)
 
 
 def test_every_co_appearing_group_passes():
-    """Each set drawn in one figure must be mutually separable.
-
-    Uses `validate_registry`, not `validate`: the raw validator treats every
-    colour as categorical, which wrongly fails a context fill for having no
-    chroma. This caught a real defect when the module was written -- the free
-    baseline on ink_3 sat at CVD dE 4.8 against `blend`, below the 6.0 floor.
-    """
+    """Each set drawn in one figure is mutually separable (with CONTEXT fills
+    exempt from the band/chroma checks)."""
     reports = pal.validate_registry()
     assert reports, "no groups defined"
     bad = {k: r["fails"] for k, r in reports.items() if r["fails"]}
@@ -45,9 +33,8 @@ def test_every_co_appearing_group_passes():
 
 
 def test_every_entity_has_exactly_one_class():
-    """A new entity added without a class would silently get categorical checks
-    (or skip them), depending on which set it fell into. Partition, not overlap.
-    """
+    """CATEGORICAL and CONTEXT partition ENTITY, so validate_registry() checks
+    every entity the right way."""
     both = pal.CATEGORICAL & pal.CONTEXT
     assert not both, f"entities in both classes: {sorted(both)}"
     unclassed = set(pal.ENTITY) - pal.CATEGORICAL - pal.CONTEXT
@@ -64,12 +51,8 @@ def test_every_group_member_is_a_registered_entity():
 
 
 def test_no_new_entity_colour_drift():
-    """THE test. Any {entity: hex} literal disagreeing with the registry, other
-    than the eight already recorded, fails.
-
-    Migrating a script should REMOVE its entry from KNOWN_DIVERGENCES; adding a
-    new disagreement should fail here rather than reach a deck.
-    """
+    """Any {entity: hex} disagreeing with the registry and not in
+    KNOWN_DIVERGENCES fails. Migrating a script should remove its entry."""
     if not PLOTTING.is_dir():
         pytest.skip("scripts/plotting not present")
     found = {(fn, name): got for fn, name, got, _want in pal.drift_report(PLOTTING)}
@@ -81,13 +64,8 @@ def test_no_new_entity_colour_drift():
 
 
 def test_known_divergences_are_not_stale():
-    """If a recorded divergence has been fixed, the list must shrink with it.
-
-    Without this, KNOWN_DIVERGENCES silently rots into a list of files that were
-    corrected years ago and the drift test quietly stops covering anything.
-    Statically-invisible entries (colour via a module constant) are exempt --
-    `drift_report` cannot see those by design.
-    """
+    """A recorded divergence that has been fixed must be removed from the list.
+    Entries `drift_report` can't see statically are exempt."""
     if not PLOTTING.is_dir():
         pytest.skip("scripts/plotting not present")
     visible = {(fn, name) for fn, name, _got, _want in pal.drift_report(PLOTTING)}
@@ -102,8 +80,7 @@ def test_known_divergences_are_not_stale():
 
 
 def test_entity_lookup_raises_on_a_typo():
-    """`ENTITY.get("gnn")` returning None would draw a black line and look like
-    a styling choice. The accessor must fail instead."""
+    """entity() raises instead of returning None (which would draw black)."""
     assert pal.entity("GNN") == pal.SERIES[0]
     with pytest.raises(KeyError):
         pal.entity("gnn")
@@ -112,19 +89,15 @@ def test_entity_lookup_raises_on_a_typo():
 
 
 def test_argument_roles_are_mutually_separable():
-    """The three meaning-carrying argument colours can appear in one schematic
-    (broken vs fixed vs holdout), so they must clear the same separation floors
-    the ENTITY groups do. `context` is excluded on purpose: it is a neutral
-    doing de-emphasis, exactly like CONTEXT on the entity side."""
+    """broken / fixed / holdout can share a schematic, so they clear the
+    separation floors. `context` is a neutral and excluded."""
     r = pal.validate([pal.ARGUMENT[k] for k in pal.ARGUMENT_CATEGORICAL],
                      pairs="all")
     assert r["ok"], r["fails"]
 
 
 def test_argument_is_a_separate_axis_from_entity():
-    """Merging the two would be the actual mistake this axis exists to prevent:
-    ENTITY is fixed to an object across a deck, ARGUMENT is a role a different
-    object occupies on each slide."""
+    """ARGUMENT and ENTITY share no names, and each lookup rejects the other's."""
     assert not set(pal.ARGUMENT) & set(pal.ENTITY)
     with pytest.raises(KeyError):
         pal.argument("GNN")
@@ -133,7 +106,7 @@ def test_argument_is_a_separate_axis_from_entity():
 
 
 def test_css_vars_carry_the_argument_axis_under_a_prefix():
-    """Unprefixed `--context` would read as a chrome token beside --ink/--grid."""
+    """ARGUMENT tokens are emitted as --arg-*, not alongside --ink/--grid."""
     css = pal.as_css_vars()
     for k, v in pal.ARGUMENT.items():
         assert f"--arg-{k}: {v};" in css
@@ -156,20 +129,16 @@ def _schematics():
             if fn.endswith(".html"):
                 out[fn] = open(os.path.join(d, fn), encoding="utf-8").read()
     if not out:
-        pytest.skip("schematics live under admin/, which is local-only")
+        pytest.skip("no schematic dirs on this checkout")
     return out
 
 
 def test_argument_axis_is_schematic_only():
-    """ARGUMENT's colours COLLIDE with ENTITY's on purpose -- broken is exactly
-    receptor_other, fixed is 6.1 dE from GNN. That is safe only while the two
-    axes never meet, so the medium rule is enforced rather than commented: a
-    matplotlib chart uses ENTITY and must not reach for ARGUMENT."""
-    # Match the palette API precisely. A bare "argument(" substring hits
-    # argparse's add_argument in 38 of these files -- a check that noisy would
-    # have been deleted within a week.
+    """No matplotlib chart uses the ARGUMENT axis, whose colours collide with
+    ENTITY's (see palette.ARGUMENT)."""
+    # Match the palette API precisely: a bare "argument(" also hits argparse.
     use = re.compile(r"\b(?:pal|_pal|palette)\.(?:argument\s*\(|ARGUMENT\b)"
-                     r"|from\s+lib\.palette\s+import\s+[^\n]*\bargument\b")
+                     r"|from\s+(?:fig)?lib\.palette\s+import\s+[^\n]*\bargument\b")
     offenders = [fn for fn, src in _plotting_sources().items() if use.search(src)]
     assert not offenders, (
         f"{offenders} use the ARGUMENT axis in a chart. ARGUMENT is for HTML+SVG "
@@ -178,9 +147,7 @@ def test_argument_axis_is_schematic_only():
 
 
 def test_no_schematic_mixes_the_two_axes():
-    """The other half of the same rule. Vacuous today because the schematics
-    still use literal hex, and deliberately kept so it bites the first figure
-    that adopts the tokens and reaches across."""
+    """No schematic uses both ARGUMENT and ENTITY tokens."""
     ent = tuple(f"var(--{k.lower().replace('_', '-')})" for k in pal.ENTITY)
     for fn, src in _schematics().items():
         if "var(--arg-" in src:
@@ -189,8 +156,7 @@ def test_no_schematic_mixes_the_two_axes():
 
 
 def test_no_file_draws_a_shared_slot_pair():
-    """`pose` and `GNN` are both SERIES[0]. The registry has always SAID this is
-    safe only while no figure draws both; this is what makes that true."""
+    """No script draws both members of a SHARED_SLOTS pair (same colour)."""
     for a, b in pal.SHARED_SLOTS:
         assert pal.entity(a) == pal.entity(b), f"{a}/{b} no longer share a slot"
         both = [fn for fn, src in _plotting_sources().items()
@@ -201,17 +167,14 @@ def test_no_file_draws_a_shared_slot_pair():
 
 
 def test_sequential_names_are_real_colormaps():
-    """Not checked inside palette.py: it is stdlib-only so it stays importable
-    from envs/geometric. The matplotlib-dependent half of the check lives here."""
+    """Checked here because palette.py is stdlib-only."""
     import matplotlib
     for name, cmap in pal.SEQUENTIAL.items():
         assert matplotlib.colormaps[cmap] is not None, f"{name} -> {cmap!r}"
 
 
 def test_density_ramp_collides_with_the_blue_marks_and_the_warm_one_does_not():
-    """Pins the reason `density_warm` exists. SERIES[0] is blue and `density` is
-    a blue ramp, so a GNN mark on a Blues hexbin sinks into it -- which is what
-    four existing figures do. `density_warm` must actually be an escape."""
+    """`density` sits near SERIES[0] blue; `density_warm` is far from it."""
     import matplotlib
     def mid(cmap):
         r, g, b, _ = matplotlib.colormaps[cmap](0.65)
@@ -223,15 +186,13 @@ def test_density_ramp_collides_with_the_blue_marks_and_the_warm_one_does_not():
 
 def test_drift_report_defaults_to_this_repo():
     if not os.path.isdir(pal.default_plotting_dir()):
-        pytest.skip("not inside the wuhrlab repo (karyoPPI/scripts/plotting absent)")
+        pytest.skip("default plotting dir only exists in the author's lab checkout")
     rows = pal.drift_report()
     assert {(fn, name) for fn, name, _g, _w in rows} == set(pal.KNOWN_DIVERGENCES)
 
 
 def test_schematic_near_misses_are_chromatic_only():
-    """Near-neutrals sit close together in OKLab, so without the chroma floor a
-    white page background reads as drift against the chart surface -- 86 of the
-    first 198 hits were exactly that kind of noise."""
+    """Near-miss matches are never neutrals (they sit close together in OKLab)."""
     _schematics()
     for fn, h, kind, tok in pal.schematic_drift_report():
         if kind == "near":
@@ -248,8 +209,7 @@ def test_all_registered_values_are_six_digit_hex():
 
 
 def test_series_order_is_the_documented_one():
-    """The order IS the CVD-safety mechanism -- re-sorting it silently breaks
-    the adjacent-pair guarantee the reference values were measured under."""
+    """SERIES order is the CVD-safety mechanism; pin it."""
     assert pal.SERIES[:3] == ["#2a78d6", "#eb6834", "#1baf7a"]
     assert len(pal.SERIES) == len(pal.SERIES_DARK) == 8
 
@@ -266,8 +226,7 @@ def test_css_vars_emit_parseable_declarations():
 
 
 def test_contrast_and_delta_e_against_known_values():
-    """Pin the two conversion paths against values computable by hand, so a
-    refactor of the OKLab math fails here rather than in a figure."""
+    """Contrast and delta_e match hand-computable values and are symmetric."""
     assert pal.contrast("#000000", "#ffffff") == pytest.approx(21.0, abs=0.01)
     assert pal.contrast("#ffffff", "#ffffff") == pytest.approx(1.0, abs=1e-9)
     assert pal.delta_e("#2a78d6", "#2a78d6") == pytest.approx(0.0, abs=1e-9)
@@ -279,8 +238,7 @@ def test_contrast_and_delta_e_against_known_values():
 
 
 def test_role_greys_are_ordered_light_to_dark():
-    """ink darker than ink_2 darker than ink_3 darker than grid darker than
-    surface -- if that ordering ever inverts, every figure's hierarchy does."""
+    """ink < ink_2 < ink_3 < grid < surface in lightness."""
     ls = [pal.oklch(pal.ROLE[k])[0]
           for k in ("ink", "ink_2", "ink_3", "grid", "surface")]
     assert ls == sorted(ls), f"ROLE lightness is not monotonic: {ls}"
