@@ -32,25 +32,16 @@ from matplotlib.text import Text
 from matplotlib.transforms import BlendedGenericTransform
 
 #: An intersection must be at least this many display pixels in BOTH axes and
-#: cover this fraction of the smaller box before it counts. Tuned so the
-#: 2026-08-05 figures' deliberately-tight stat blocks pass clean.
+#: cover this fraction of the smaller box before it counts. Loose enough that
+#: deliberately tight stat blocks pass clean.
 OVERLAP_MIN_PX = 3.0
 OVERLAP_MIN_FRAC = 0.15
 
-#: Second acceptance rule for OVERLAP, added 2026-08-13 to close a real blind
-#: spot in the first. `OVERLAP_MIN_FRAC` divides the intersection by the SMALLER
-#: BOX'S AREA, which systematically under-reports a long thin box crossing a
-#: short wide one: a rotated 90° panel label piercing a panel title covers 100%
-#: of the title's HEIGHT and only ~7% of the label's area, so it passed clean
-#: while being plainly wrong on screen (found on
-#: `passive_diffusion/figures/20260813_nls_vs_deviation.png`, where the linter
-#: said "layout clean" and visual review did not).
-#:
-#: A crossing is the case where the intersection spans essentially the full
-#: width of one box AND the full height of the other -- a plus-shape. That is
-#: geometrically distinct from the tight-adjacency case the area rule was tuned
-#: to allow, where two stacked lines of a stat block graze by a pixel: there the
-#: intersection spans one box's width but nothing like either box's height.
+#: Second acceptance rule for OVERLAP. The area rule under-reports a long thin
+#: box crossing a short wide one (a rotated panel label through a title covers
+#: the title's full height but ~7% of the label's area). A crossing -- the
+#: intersection spans most of one box's width AND the other's height -- is
+#: distinct from two stacked lines grazing, which the area rule is meant to allow.
 OVERLAP_CROSS_FRAC = 0.8
 
 #: Points of slack before a box counts as off-canvas. savefig crops at exactly
@@ -60,27 +51,20 @@ EDGE_SLACK_PX = 1.0
 #: Data points inside the legend box before it is worth reporting.
 LEGEND_MIN_POINTS = 20
 
-#: OVERDATA thresholds (opt-in check; see the module docstring). Points reuses
-#: the LEGEND figure because it is the same measurement on the same units and
-#: that threshold is already trusted. Coverage is the bar-chart route: patch
-#: count is not comparable to point count (two bars under a label is a real
-#: collision; two points is not), so patches are judged by the fraction of the
-#: text box they cover instead.
-OVERDATA_MIN_POINTS = 20
-
-#: The relative rule, added 2026-08-17. The absolute count above is a CAP, not
-#: the trigger: a text box covering this fraction of an axes' own marks is a
-#: collision whether that axes holds 40 points or 4,000. Floored so a 12-point
+#: OVERDATA thresholds. The point count is a CAP, not the trigger: the check
+#: fires when a text box covers OVERDATA_MIN_FRAC of the axes' own marks, so it
+#: works on a 40-point panel and a 4,000-point scatter alike. Floored so a small
 #: panel does not fire on one grazed marker.
+OVERDATA_MIN_POINTS = 20
 OVERDATA_MIN_FRAC = 0.05
 OVERDATA_MIN_POINTS_FLOOR = 4
 
-#: A text bbox at least this opaque counts as the documented remedy rather than
-#: as a fault. Set below 1.0 on purpose: 0.8-0.9 white backing is the honest fix
-#: for a label over a faint background layer -- the marks stay visible around the
-#: text -- and demanding full opacity would push authors toward hiding data.
+#: A text bbox at least this opaque counts as fixed. Below 1.0 on purpose: a
+#: semi-opaque backing keeps the marks visible around the label.
 OVERDATA_BBOX_ALPHA = 0.75
 
+#: Bars are judged by the fraction of the text box they cover, not by count:
+#: two bars under a label is a collision, two scatter points is not.
 OVERDATA_MIN_COVER = 0.35
 
 #: CLIPPED fires when at least this many marks, AND this fraction of the axes'
@@ -89,64 +73,38 @@ OVERDATA_MIN_COVER = 0.35
 CLIPPED_MIN_POINTS = 3
 CLIPPED_MIN_FRAC = 0.02
 
-#: Per-AXES opt-out for CLIPPED, via `ax.set_gid(CLIP_OK_GID)`.
-#:
-#: `check_clipped=False` is the whole-figure switch and it is too blunt for the
-#: common honest case: a multi-panel figure where one panel is a deliberate
-#: window and its neighbour carries the full range
-#: (`20260805_relaxation_time_vs_radius` panel A is linear 0-14 h, panel B is log
-#: 5e-3 to 2e5). Switching the figure off would also stop the check on the panel
-#: that is not zoomed. A gid on the specific axes is a DECLARATION in the script,
-#: greppable and reviewable, rather than a silence.
+#: Per-AXES opt-out for CLIPPED, via `ax.set_gid(CLIP_OK_GID)`. Finer than
+#: `check_clipped=False`: one panel can be a deliberate zoom while its neighbour
+#: is still checked, and the gid is a greppable declaration in the script.
 CLIP_OK_GID = "figcheck:clip-ok"
 
-#: OVERLINE fires when a text box crosses a plotted LINE (not a marker, not a
-#: patch) for at least this many display pixels. Added 2026-09-09: a plain
-#: `ax.plot(x, y)` curve is invisible to OVERDATA, which only counts markers
-#: (`_scatter_like` deliberately excludes marker-less lines, since a model
-#: curve's own vertices running off-axes is normal) and to patch coverage. A
-#: label sitting directly on a curve therefore linted clean while being
-#: visibly wrong -- three times in one session (a MOR-curve label, a staircase
-#: decomposition label, a "other three fixes" label). Small on purpose, the
-#: same reasoning as OVERLAP_MIN_PX: big enough to reject a corner graze,
-#: small enough to catch a real crossing.
+#: OVERLINE fires when a text box crosses a plotted LINE for at least this many
+#: display pixels. OVERDATA only counts markers and patches, so a label sitting
+#: on a plain `ax.plot` curve needs its own check. Small, like OVERLAP_MIN_PX:
+#: rejects a corner graze, catches a real crossing.
 OVERLINE_MIN_PX = 3.0
 
-#: COLORROLE is opt-in (`check_color_roles=True`), unlike every other check
-#: here. It compares legend swatch colours across axes in one figure and warns
-#: when the same colour backs two different labels -- caught 2026-09-09 after
-#: shipping a figure with green/blue meaning different things in two panels.
-#: Left off by default: `palette.py` validates CVD separation rigorously and
-#: says nothing about SEMANTICS, and a genuinely reused colour (e.g. a shared
-#: "control" role across panels) is often correct, not a bug -- this is the
-#: one check here likely to cry wolf, so it stays a deliberate opt-in rather
-#: than something that has to be silenced per figure.
+#: COLORROLE (one legend colour backing two different labels across panels) is
+#: opt-in: a deliberately shared colour, e.g. "control" in every panel, is common
+#: and correct, so this check would cry wolf if it ran by default.
 CHECK_COLOR_ROLES_DEFAULT = False
 
 #: A patch spanning at least this fraction of the axes is background shading
-#: (axhspan/axvspan/fill_between), not a data mark. Labelling a shaded band is
-#: normal and must not be reported.
-#:
-#: `axvspan` was missed until 2026-08-17: this rule tested WIDTH only, so a
-#: full-height vertical band -- narrow by construction -- scored as a bar, and
-#: six labels inside one `axvspan` were reported as covered "by bars" the first
-#: time OVERDATA ran by default. Widening it to "either direction" then exempted
-#: real bar charts whose bars reach the top of the axes, which is why the rule
-#: below also asks HOW the patch is pinned. See `_is_background_patch`.
+#: (axhspan/axvspan/fill_between), not a data mark, so labels on it are fine.
+#: Extent alone can't tell an axvspan from a tall bar; see `_is_background_patch`.
 BACKGROUND_PATCH_FRAC = 0.9
 
 #: EXPANDED fires when `bbox_inches="tight"` grows the canvas at least this
-#: much past the declared `figsize`. A tight save always differs a little (axis
-#: labels, tick padding), so this is set above that noise floor and tuned to
-#: the actual measured cases: 14.6->19.98in (1.37x) and 14.6->15.7in (1.08x),
-#: both driven by one overhanging `fig.text` call. See EXPANDED below.
+#: much past the declared `figsize`. A tight save always grows a little (tick
+#: padding), so this sits above that noise; a single overhanging `fig.text` is
+#: typically 1.08x or more.
 EXPAND_MIN_FRAC = 1.05
 
 #: Default target slide, inches (16:9 widescreen).
 SLIDE_IN = (13.333, 7.5)
 
-#: Below this, projected text is not readable from the back of a room. The
-#: house skill asks for 11pt body; 7 is the floor at which it is simply broken.
+#: Below this, projected text is unreadable from the back of a room. Aim for
+#: 11pt body text; 7 is the floor at which it is simply broken.
 MIN_PT = 7.0
 
 SHOW_PER_KIND = 8
@@ -165,12 +123,10 @@ class Finding:
 def _live_ticklabels(axis):
     """Tick labels the axis will actually DRAW.
 
-    `get_xticklabels()` returns a label for every locator tick, including ticks
-    outside the current view limits. Those are culled at draw time but still
-    report a `get_window_extent()`, placed off the end of the axis -- which is
-    how a y-tick at 1.2 on an axis limited to (0.38, 1.02) was reported both as
-    running off the canvas and as colliding with a real x-tick 15 times over.
-    Filter on the view interval, which is what the draw pass uses.
+    `get_xticklabels()` includes ticks outside the view limits. They aren't
+    drawn but still report a window extent off the end of the axis, which shows
+    up as phantom OUTSIDE/OVERLAP findings. Filter on the view interval, as the
+    draw pass does.
     """
     lo, hi = sorted(axis.get_view_interval())
     pad = (hi - lo) * 1e-6
@@ -188,13 +144,10 @@ def _live_ticklabels(axis):
 def _collect(fig):
     """Every Text artist that is actually drawn, from the documented accessors.
 
-    NOT `fig.findobj(Text)`. matplotlib keeps a POOL of `Tick` objects per axis
-    and reuses it across formatter changes; the unused ones keep stale label
-    text and still report `get_visible() == True`. On the 08-05 gate matrix that
-    produced 15 confident OVERLAP reports between a real '0.0' x-tick and a
-    '1.2' y-tick that does not exist on the figure at all -- a linter reporting
-    collisions between phantom artists is worse than no linter. `get_xticklabels
-    ()` and friends return only the current set, so enumerate from those.
+    NOT `fig.findobj(Text)`: matplotlib pools `Tick` objects per axis, and the
+    unused ones keep stale label text and still report visible, which produces
+    collisions with ticks that aren't on the figure. Enumerate from the
+    accessors, which return only the current set.
     """
     out = list(fig.texts)
     for leg in getattr(fig, "legends", []):
@@ -225,17 +178,10 @@ def _collect(fig):
 def _text_only_extent(t: Text, renderer):
     """The text's own ink -- excludes an `annotate(..., arrowprops=...)` arrow.
 
-    `Annotation.get_window_extent()` UNIONS the arrow patch's bbox into its
-    return value (so `bbox_inches="tight"` does not clip the arrow). Every
-    check here wants where the READABLE TEXT sits, not the arrow: an
-    annotation arrow is designed to reach right up to the data point it is
-    labelling, so leaving the union in makes the label's reported footprint
-    include that entire reach. Found 2026-09-09 chasing an OVERLINE hit a
-    screenshot could not confirm -- a callout's two-line caption sat well
-    clear of a plotted curve, but its `get_window_extent()` ran all the way
-    up to the curve because the box also covered the leader line pointing at
-    it. `Text.get_window_extent` (the un-overridden base method) is the fix:
-    called on an `Annotation` instance it returns the text alone.
+    `Annotation.get_window_extent()` unions in the arrow's bbox, and an arrow
+    reaches right up to the data it labels, so every check here would see the
+    label as sitting on the data. The base `Text.get_window_extent`, called on
+    an `Annotation`, returns the text alone.
     """
     if getattr(t, "arrow_patch", None) is not None:
         return Text.get_window_extent(t, renderer)
@@ -271,12 +217,7 @@ def _label(t: Text, limit: int = 46) -> str:
 
 
 def _crosses(iw, ih, a, b):
-    """Does the intersection pierce one box across the other's full extent?
-
-    See OVERLAP_CROSS_FRAC. True when the intersection spans essentially all of
-    one box's width and all of the other's height -- the rotated-label-through-
-    a-title case, which the area rule cannot see.
-    """
+    """Does the intersection pierce one box across the other? See OVERLAP_CROSS_FRAC."""
     f = OVERLAP_CROSS_FRAC
     return ((iw >= f * a.width and ih >= f * b.height)
             or (iw >= f * b.width and ih >= f * a.height))
@@ -296,9 +237,7 @@ def _overlap(a, b):
 
 
 def _segment_clip_len(x0, y0, x1, y1, box):
-    """Liang-Barsky clip: how many pixels of segment (x0,y0)-(x1,y1) fall
-    inside `box`, or 0.0 if it misses entirely. Standard parametric clip --
-    walk the four half-plane tests and narrow the surviving `t` range."""
+    """Pixels of segment (x0,y0)-(x1,y1) inside `box` (Liang-Barsky clip); 0.0 on a miss."""
     dx, dy = x1 - x0, y1 - y0
     p = (-dx, dx, -dy, dy)
     q = (x0 - box.x0, box.x1 - x0, y0 - box.y0, box.y1 - y0)
@@ -332,18 +271,12 @@ def _line_hits_text(xy_disp, box):
 
 
 def _is_full_span_reference_line(line) -> bool:
-    """True for `axhline`/`axvline` (and anything built the same way): a
-    full-PANEL threshold or context marker, not data.
+    """True for `axhline`/`axvline`: a full-panel reference marker, not data.
 
-    Same reasoning as `_is_background_patch` for `axhspan`/`axvspan`, and the
-    test is exactly as mechanical: both matplotlib helpers hard-code their one
-    free axis to the placeholder range [0, 1] in AXES-FRACTION coordinates via
-    a blended transform (one axis `transAxes`, the other `transData`), so this
-    reads matplotlib's own construction rather than guessing from geometry.
-    Found 2026-09-09 sweeping the repo for OVERLINE hits: an `axhline`
-    reference threshold spans the whole axes by construction, so ANY caption
-    placed near that value reads as "a curve runs under this text" when what
-    actually ran under it was a context marker, never a measurement.
+    Exempt from OVERLINE because it spans the whole axes by construction, so any
+    caption near that value would trip it. Both helpers pin their free axis to
+    [0, 1] in axes fraction via a blended transform, so this reads matplotlib's
+    own construction rather than guessing from geometry.
     """
     if not isinstance(line.get_transform(), BlendedGenericTransform):
         return False
@@ -376,24 +309,19 @@ def _drawn_lines(ax):
     return out
 
 
-#: How close an `annotate(..., xy=...)` anchor must sit to a line before that
-#: line counts as "the thing this label names" rather than an accidental
-#: collision -- see `_anchor_disp` and OVERLINE below. Set to roughly a
-#: default marker's radius plus a little slack.
+#: How close an `annotate(..., xy=...)` anchor must sit to a line for that line
+#: to count as the thing the label names, which exempts it from OVERLINE for that
+#: label only. Roughly a default marker's radius plus slack.
 ANCHOR_TOL_PX = 14.0
 
 
 def _anchor_disp(t, ax):
     """Display-space position of an `Annotation`'s OWN `xy`, or None.
 
-    Only handles the default case (`xycoords` unset or `"data"`) -- the common
-    house pattern this exists for is `ax.annotate(f"{value:.1f}", xy=(x, y),
-    xytext=(dx, dy), textcoords="offset points")`, i.e. a value written at a
-    specific point with a small pixel nudge. Anything else (axes-fraction
-    coords, a second annotation as the anchor) returns None and the caller
-    checks that text against every line with no exemption -- conservative,
-    since a real collision wrongly let through costs more than one wrongly
-    kept.
+    Only data coordinates are handled -- the pattern this exists for is a value
+    written at a point on a line, `ax.annotate(f"{v:.1f}", xy=(x, y), xytext=...,
+    textcoords="offset points")`. Anything else returns None, and the text is
+    checked against every line with no exemption.
     """
     xy = getattr(t, "xy", None)
     xycoords = getattr(t, "xycoords", "data")
@@ -467,8 +395,7 @@ def _is_background_patch(patch, pb, ax_w, ax_h):
 
     What does: an `axhspan`/`axvspan` is pinned to the AXES in its spanning
     direction, so its own untransformed bbox runs 0..1 there (axes fraction),
-    while a bar's comes from the data and runs 0..height. Verified against
-    matplotlib's own output rather than assumed:
+    while a bar's comes from the data and runs 0..height:
 
         axvspan  Bbox(x0=2.0, y0=0.0, x1=3.0, y1=1.0)     <- y pinned
         bar      Bbox(x0=1.6, y0=0.0, x1=2.4, y1=3.0)     <- y is data
@@ -476,10 +403,8 @@ def _is_background_patch(patch, pb, ax_w, ax_h):
     Both the pinning AND a full-extent render are required, so a data patch that
     happens to sit in 0..1 is not exempted unless it also spans the axes.
 
-    KNOWN EDGE CASE: a bar of height exactly 1.0 on an axes with ylim (0, 1) is
-    indistinguishable this way and would be treated as background. Harmless --
-    patch coverage is the weaker of the two OVERDATA rules and the point rule
-    still applies.
+    Edge case: a bar of height exactly 1.0 on ylim (0, 1) is treated as
+    background. Harmless -- the point rule still applies.
     """
     if ax_w > 0 and pb.width >= BACKGROUND_PATCH_FRAC * ax_w:
         return True                      # axhspan, or any full-width band
@@ -500,10 +425,7 @@ def _is_background_patch(patch, pb, ax_w, ax_h):
 def _patch_cover(ax, box, renderer):
     """Fraction of `box` covered by non-background patches (bars, boxes, wedges).
 
-    Patch COUNT is not comparable to point count -- two bars under a label is a
-    real collision and two scatter points is not -- so bar-like data is judged
-    by area instead. Full-width patches are background shading and are skipped;
-    labelling an `axhspan` is normal.
+    Background bands (see `_is_background_patch`) are skipped.
     """
     if box.width <= 0 or box.height <= 0:
         return 0.0
@@ -530,14 +452,10 @@ def _patch_cover(ax, box, renderer):
 def _errorbar_decoration(ax):
     """ids of artists that are error-bar decoration, not data marks.
 
-    An `errorbar` call adds two cap Line2Ds (markers-only, so `_scatter_like`
-    would count them) and a LineCollection per bar direction (whose default
-    `get_offsets()` is a single [0, 0], which would count as a mark AT THE ORIGIN
-    and therefore usually as CLIPPED). Left in, a 23-point literature figure
-    reported "10 of 57 data marks" outside its limits when the honest answer was
-    2 of 23 -- the ratio survived but the numbers did not, and a check whose
-    counts do not match what a reader can count by hand will be distrusted and
-    switched off.
+    An `errorbar` call adds cap Line2Ds (markers-only, so `_scatter_like` would
+    count them) and LineCollections whose default offsets are a single [0, 0]
+    (a phantom mark at the origin, often CLIPPED). Excluding them keeps the
+    reported counts matching what a reader can count.
     """
     from matplotlib.container import ErrorbarContainer
 
@@ -560,10 +478,8 @@ def _scatter_like(ax):
 
     Line2D is included ONLY when it is markers-without-a-line, i.e. a scatter
     drawn through `ax.plot(x, y, "o")`. A real line's vertices are not marks: a
-    model curve running off the top of the axes is normal and intentional
-    (`20260817_probe_ladder` draws one deliberately), and counting its vertices
-    as clipped data would make the CLIPPED check fire on almost every figure
-    here -- the fastest way to get a check switched back off.
+    model curve running off the axes is normal, and counting it would make
+    CLIPPED fire on almost every figure.
     """
     skip = _errorbar_decoration(ax)
     out = []
@@ -597,8 +513,8 @@ def _axes_mark_count(ax):
 def _overdata_threshold(n_marks):
     """Marks-under-text at which OVERDATA fires, given the axes' own density.
 
-    Relative with a floor and a cap: see the module docstring's measured table
-    for why the old flat 20 could not fire on a 179-point panel.
+    Relative with a floor and a cap: a flat count can't fire on a typical
+    ~200-point panel, where a text box covers fewer than 20 marks wherever it sits.
     """
     if n_marks <= 0:
         return OVERDATA_MIN_POINTS
@@ -607,12 +523,8 @@ def _overdata_threshold(n_marks):
 
 
 def _has_opaque_bbox(t: Text) -> bool:
-    """True if this text carries a backing patch opaque enough to count as fixed.
-
-    The check's own message has always said "move it, or give it an opaque
-    bbox"; until 2026-08-17 nothing verified the second half, so the remedy did
-    not silence the finding.
-    """
+    """True if this text carries a backing patch opaque enough to count as fixed
+    (the remedy OVERDATA/OVERLINE suggest)."""
     patch = t.get_bbox_patch()
     if patch is None:
         return False
@@ -675,18 +587,10 @@ def _hex(rgba) -> str:
 def _artist_color(handle):
     """The one colour a legend swatch reads as, or None if it has none/varies.
 
-    REGRESSION, 2026-09-09: a Line2D used as a marker-only legend PROXY (the
-    house pattern for a scatter legend --
-    `Line2D([], [], marker="o", ls="", mfc=colour, mec="white")`) has NO drawn
-    line, so `get_color()` -- checked first, and always present on a Line2D --
-    returns the LINE colour's unset placeholder (`"C0"`), not the marker face
-    colour that is actually visible. On
-    `20260826_probe_ladder_revised.py` this read all four legend entries
-    (dye/PEG/protein/overlap-set, visibly orange/green/blue/white on screen)
-    as the identical resolved colour of `"C0"`, manufacturing a COLORROLE
-    finding out of nothing. Same marker-only test `_scatter_like` already uses
-    elsewhere in this file (`ls in ("None", "none", " ", "")`) decides which
-    colour attribute is the one actually drawn.
+    A marker-only Line2D (e.g. a scatter legend proxy,
+    `Line2D([], [], marker="o", ls="", mfc=colour)`) draws no line, so its
+    `get_color()` is the unset "C0" placeholder, not what's visible. Read the
+    marker colour instead, using the same marker-only test as `_scatter_like`.
     """
     try:
         if isinstance(handle, Line2D):
@@ -907,10 +811,8 @@ def report(fig, prefix: str = "", **kw) -> int:
         print(f"{head}: layout clean")
         return 0
     print(f"{head}: {len(found)} issue(s)")
-    # CLIPPED first: it is the only kind that reports MISSING data, so it
-    # outranks anything about placement. OVERDATA was absent from this tuple
-    # until 2026-08-17, so an OVERDATA finding counted toward the total and then
-    # printed nothing -- the one failure mode worse than not checking.
+    # CLIPPED first: it is the only kind that reports MISSING data. Every kind
+    # must be listed here, or its findings count toward the total but never print.
     for kind in ("CLIPPED", "OUTSIDE", "OVERLAP", "OVERLINE", "EXPANDED", "SMALL",
                  "LEGEND", "OVERDATA", "COLORROLE"):
         for f in (f for f in found if f.kind == kind):
@@ -961,17 +863,10 @@ def install(**kw) -> None:
 
 
 def _main(argv) -> int:
-    """Run `script` under the savefig hook, then flag a stale-output crash.
+    """Run `script` under the savefig hook, then warn if it never saved.
 
-    WHY: a script that raises before its first `savefig` leaves the PREVIOUS
-    run's PNG/SVG on disk, looking exactly like a fresh one -- there is no
-    exception in the figure file itself. Found 2026-09-09 when an undefined
-    name killed a script mid-run and the old output was the only thing
-    reviewed; the only tell was that the `[figcheck] ... wrote ...`-style save
-    line was missing from the console output, which is easy to miss and
-    impossible to grep for after the fact. Checking `Figure.savefig._saves`
-    after the run makes that absence an explicit warning instead of something
-    you have to notice.
+    A script that dies before its first `savefig` leaves the previous run's
+    output on disk looking fresh, so the absence of a save is made explicit.
     """
     if len(argv) < 2:
         print(__doc__.strip())
