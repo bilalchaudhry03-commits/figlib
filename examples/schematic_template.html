@@ -15,6 +15,8 @@ What it already does right (keep these when you edit):
   = Colours come from CSS variables set as presentation attributes or class rules, one way per
     property (a class rule silently beats an attribute).
   = Geometry that depends on text width is computed by the script below, after the font exists.
+  = Every label is ink. No grey sub-line under a label: if it is worth saying, it is a label;
+    otherwise it goes in the speaker notes. Grey (--ink-2, --ink-3) is for strokes and context shapes.
 Colour tokens: python -c "from figlib import palette; print(palette.as_css_vars(names=[]))"
 -->
 <style>
@@ -29,7 +31,6 @@ Colour tokens: python -c "from figlib import palette; print(palette.as_css_vars(
   svg { width: 100%; max-width: 1600px; height: auto; display: block; }
   text { font-family: var(--font); fill: var(--ink); }
   .label { font-size: 34px; font-weight: 700; }
-  .note  { font-size: 28px; fill: var(--ink-2); }
   .flow  { stroke: var(--ink-2); stroke-width: 3; fill: none; }
 </style>
 </head>
@@ -46,9 +47,9 @@ Colour tokens: python -c "from figlib import palette; print(palette.as_css_vars(
 (function () {
   // ==== content: one entry per step, left to right ====
   const STEPS = [
-    {label: "Sample",  note: "what goes in",       fill: "var(--chain-a-fill)", stroke: "var(--chain-a-stroke)"},
-    {label: "Measure", note: "what is recorded",   fill: "var(--chain-b-fill)", stroke: "var(--chain-b-stroke)"},
-    {label: "Model",   note: "what comes out",     fill: "var(--chain-c-fill)", stroke: "var(--chain-c-stroke)"},
+    {label: "Sample",  fill: "var(--chain-a-fill)", stroke: "var(--chain-a-stroke)"},
+    {label: "Measure", fill: "var(--chain-b-fill)", stroke: "var(--chain-b-stroke)"},
+    {label: "Model",   fill: "var(--chain-c-fill)", stroke: "var(--chain-c-stroke)"},
   ];
   // ==== layout grid (viewBox units) ====
   const W = 1600, CY = 400, PAD_X = 36, BOX_H = 120, GAP = 150, MIN_W = 240;
@@ -72,7 +73,6 @@ Colour tokens: python -c "from figlib import palette; print(palette.as_css_vars(
                             stroke: s.stroke, "stroke-width": 3, "fill-opacity": 0.25});
     root.insertBefore(box, labels[i]);                    // box under its label
     labels[i].setAttribute("x", x + w / 2);
-    el("text", {class: "note", "text-anchor": "middle", x: x + w / 2, y: CY + BOX_H / 2 + 50}, s.note);
     if (i < STEPS.length - 1)
       el("line", {class: "flow", x1: x + w + 14, y1: CY, x2: x + w + GAP - 14, y2: CY,
                   "marker-end": "url(#arrow)"});

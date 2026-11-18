@@ -53,6 +53,11 @@ Don't collapse the two. Beyond that: flat categorical fills, no gradients. Grey 
 context, so colour is reserved for what matters. Keep a mapping that appeared in an earlier figure
 of the same talk rather than inventing a new one.
 
+**Grey is for shapes and strokes, not for text.** No grey sub-line under a label, no grey caption,
+subtitle or "note" text in the figure: a projected audience can't read it and won't try. If a note is
+worth showing, make it a real label in ink; otherwise it belongs in the speaker notes. Axis ticks and
+labels on charts are the exception.
+
 ## Type: do the slide arithmetic
 
 "Looks fine in the browser" is not the test. The figure fills the browser at any viewBox, so type
