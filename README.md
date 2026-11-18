@@ -72,7 +72,7 @@ It reports:
 - text off the canvas;
 - text overlapping text;
 - legends or labels sitting on data;
-- type below about 9 pt once the figure is fitted to a 16:9 slide;
+- type below 7 pt once the figure is fitted to a 16:9 slide (`min_pt=` to change it; `check_layout` uses 9 pt);
 - **data points that fall outside the axis limits and were never drawn.**
 
 If an axis limit deliberately cuts off data, mark that axes with `ax.set_gid(figcheck.CLIP_OK_GID)`.
