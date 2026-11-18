@@ -1,88 +1,26 @@
 """One source of truth for figure colour, and the CVD validator that checks it.
 
-WHY THIS EXISTS
----------------
-Measured 2026-08-04 across `karyoPPI/scripts/plotting/` (73 scripts):
-
-    70 of 73 hardcode hex literals          1 imports lib.plotstyle
-    127 distinct colours in use             51 distinct near-neutral greys
-
-**Re-measured 2026-08-27 (80 scripts), and the two halves moved differently:**
-
-    72 of 80 hardcode hex literals          16 import figlib/palette
-
-Adoption went 1 -> 16, so this module is being used. But the hardcoding count
-still went UP, 70 -> 72: new scripts import it *and* keep typing literals, and
-nothing converted the old ones. **The argument for this module is intact; the
-claim that it displaced hardcoding is not, and never was made.** Anyone quoting
-these numbers should quote both -- the adoption figure alone flatters, and the
-hardcoding figure alone reads as failure.
-
-The concrete cost, and it is worse than a swap -- `GNN` is drawn in THREE
-different colours depending on which script you open:
-
-    #009e73 green   20260728_{rf_v2_rank_evidence,size_controlled_yardstick,
-                              yardstick_rebuild}_figures.py
-    #e69f00 orange  20260728_negative_tier_rebuild_figures.py
-    #2a78d6 blue    20260803_confidence_stratified_figures.py,
-                    20260804_nuclear_negative_gate_forest.py   <- the majority
-                                                                  of the newest
-
-and `RF` in two (#0072b2 blue in every 07-28 figure, #eb6834 orange in the
-08-03/08-04 ones). Several of these appear in the SAME 2026-08-05 advisor deck,
-so both families change colour mid-talk. That is not a taste failure, it is a
-missing abstraction: there was no entity registry, so every script invented one.
-
-`lib/plotstyle.py` was created in the 07-29 consolidation but only received the
-FEATURE vocabulary (`feat_color`). Entity colour was never moved. This module is
-that missing half. `plotstyle` keeps feature-family colour; this keeps entity,
-role and validation.
-
-THREE JOBS
-----------
-1. ENTITY / ROLE / SERIES  -- the registry. Semantic name in, hex out.
-2. validate()             -- the dataviz skill's six computable checks, ported
-                             to Python ONCE. `node` is unavailable on Argo
-                             (documented 07-22), so this validator had been
-                             hand-ported to scratch at least twice (2026-08-03
-                             and again 2026-08-04) and thrown away both times.
-                             That re-porting is the root cause of palettes being
-                             eyeballed rather than checked.
-3. as_css_vars()          -- the HTML+SVG schematics in
-                             `admin/presentations/group_meetings/` carry their
-                             own CSS custom properties. Emitting them from here
-                             keeps charts and schematics on one source instead
-                             of two that drift.
-
-Pure stdlib (math only) on purpose -- no numpy -- so it is importable from
-`envs/geometric` as well as `envs/analysis`, same constraint `lib/model.py`
-carries.
-
-MIGRATION STATUS: NONE. Built 2026-08-04 as a forward-looking source of truth by
-explicit user decision; no existing script was repointed. `drift_report()` exists
-to make the unmigrated state visible and to stop it getting worse --
-`figlib/tests/test_palette.py` pins the currently-known divergences, so a NEW one
-fails the suite while the existing ones are recorded rather than silently
-tolerated.
-
-Usage:
     from figlib import palette as pal
-    ax.plot(..., color=pal.entity("GNN"))
+    ax.plot(..., color=pal.entity("GNN"))      # one entity, one colour, in every figure
     ax.tick_params(colors=pal.ROLE["ink_2"])
+    pal.validate(["#0072B2", "#D55E00"])       # contrast + colour-blindness checks
+    print(pal.as_css_vars())                   # the same tokens for HTML+SVG figures
+
+Find hardcoded colours that disagree with the registry, or should be tokens:
+
+    python -m figlib.palette drift scripts/ figures/html/   # exits 1 on any disagreement
 """
 
+# stdlib only, on purpose: Manim scene files and lighter envs import this.
 import ast
 import math
 import os
 import re
 
-# ---------------------------------------------------------------------------
-# The categorical ramp. These are the dataviz skill's documented reference slots
-# in its documented ORDER -- the order is itself the CVD-safety mechanism and
-# must not be resorted. Adjacent-pair worst CVD dE 9.1 / normal-vision 19.6 in
-# light mode; the FIRST THREE also clear all-pairs (9.2 / 24.0), which is why
-# only three are spent on model families below.
-# ---------------------------------------------------------------------------
+# The categorical ramp, in the dataviz reference ORDER -- the order is itself the
+# CVD-safety mechanism, so don't resort it. Adjacent pairs clear CVD dE 9.1 / normal
+# 19.6; only the first three also clear all-pairs (9.2 / 24.0), so only three are
+# spent on model families.
 SERIES = ["#2a78d6",  # 1 blue
           "#eb6834",  # 2 orange
           "#1baf7a",  # 3 aqua
@@ -95,8 +33,7 @@ SERIES = ["#2a78d6",  # 1 blue
 SERIES_DARK = ["#3987e5", "#d95926", "#199e70", "#c98500",
                "#d55181", "#008300", "#9085e9", "#e66767"]
 
-# Text / structure tokens. Collapses the 51 distinct greys found in the survey
-# to the five roles they were actually serving.
+# Text / structure tokens: five roles for every grey a figure needs.
 ROLE = {
     "ink":      "#0b0b0b",   # primary text, reference lines
     "ink_2":    "#52514e",   # secondary text, axis labels, tick labels
@@ -109,86 +46,42 @@ ROLE_DARK = {
     "grid": "#2e2e2c", "surface": "#1a1a19",
 }
 
-# ---------------------------------------------------------------------------
-# ENTITY -- semantic name to colour. Every mapping here is EVIDENCED in the repo,
-# not invented; the provenance comment says which figure established it.
-#
-# The rule that matters: one entity, one colour, across every figure in a deck.
-# A labmate who learned "blue = GNN" on slide 6 must not re-learn it on slide 11.
-# ---------------------------------------------------------------------------
+# ENTITY -- semantic name to colour. One entity, one colour, across every figure in
+# a deck: "blue = GNN" on slide 6 must still be true on slide 11.
 ENTITY = {
-    # -- model families. Three conventions exist in the repo (see the module
-    # docstring); GNN=blue / RF=orange is adopted here because it is what the
-    # NEWEST figures use (08-03, 08-04) and because it puts both families on the
-    # first two validated SERIES slots. The four 07-28 figures use two different
-    # older conventions and are recorded in KNOWN_DIVERGENCES below -- adopting
-    # the majority-by-filecount instead would have meant migrating the newest
-    # work backwards onto a palette that was never validated as a set.
-    "GNN":            SERIES[0],   # 20260803_confidence_stratified_figures.py
-    "RF":             SERIES[1],   # ditto
-    "blend":          SERIES[2],   # ditto
+    # -- model families, on the first validated SERIES slots.
+    "GNN":            SERIES[0],
+    "RF":             SERIES[1],
+    "blend":          SERIES[2],
 
-    # -- what a model is being measured against.
-    #
-    # ink_2, NOT ink_3, and the difference is load-bearing. Free baselines are
-    # drawn as MARKS beside model marks, so they are a series and must clear the
-    # separation floors. `validate_registry()` caught that ink_3 (#8a8985) does
-    # NOT: against `blend` it lands at CVD dE 4.8 (floor 6.0) and normal-vision
-    # 14.4 (floor 15.0, a hard gate that secondary encoding does not excuse).
-    # ink_2 clears both with margin (18.3 / 21.8) and is still a neutral, so it
-    # keeps the de-emphasis reading.
-    #
-    # RESOLVED 2026-08-05 on migration, and the note that stood here was WRONG.
-    # It claimed both ink_3 users were "SAFE AS DRAWN because neither figure
-    # plots `blend` alongside the baselines". Checked rather than trusted:
-    # 20260803_confidence_stratified_figures.py draws both on one axis and in
-    # ONE LEGEND (its fig2), and 20260804_nuclear_negative_gate_forest.py does
-    # the same. So the collision was live in two published figures, measured at
-    # deuteranopia dE 4.77 (floor 6.0) and normal-vision dE 14.41 (floor 15.0).
-    # Both now use this entity and clear at 23.5 / 27.2.
-    #
-    # Still on ink_3, and CORRECTLY so: the 20260804_free_baselines_* and
-    # abstention-gate figures draw `pose` vs baselines and never draw `blend`,
-    # so the pair that collides is absent. Verified per-file, not assumed --
-    # that is the mistake this comment is replacing.
+    # -- what a model is measured against. ink_2, not ink_3: baselines are drawn as
+    # marks beside model marks, so they must clear the separation floors, and ink_3
+    # fails against `blend` (CVD dE 4.8 < 6.0, normal 14.4 < 15.0). ink_2 clears
+    # both and still reads as de-emphasised. Figures that never draw `blend` may
+    # keep ink_3 for baselines.
     "baseline_free":  ROLE["ink_2"],
-    "pose":           SERIES[0],   # 20260804_free_baselines_vs_proteome_figures
-                                   # NOTE: same slot as GNN. Safe only because
-                                   # no figure has drawn both; if one ever does,
-                                   # move pose to SERIES[3] rather than letting
-                                   # them collide.
+    "pose":           SERIES[0],   # same slot as GNN; see SHARED_SLOTS
 
-    # -- gene tiers on cargo-vs-background figures (20260803_cargo_vs_proteome).
+    # -- gene tiers on cargo-vs-background figures.
     "cargo":          "#08519C",   # confirmed / co-crystal-proven cargo
     "background":     "#BDBDBD",   # the proteome background
     "receptor_other": "#D55E00",   # a non-KPNA2 receptor (RCC1's KPNA4 case)
 
-    # -- transport modes (admin/generals prop Fig 1, 2026-09-23). Passive is the
-    # reference every active curve is read against, so it takes ink and sits in
-    # CONTEXT (band/chroma exempt, separation still checked). Import/export take
-    # violet/red deliberately: blue/orange are GNN/RF, and the prop's Fig 4 draws
-    # the RF export classifier -- orange there must not also mean "export flux".
+    # -- transport modes. Passive is the reference every active curve is read
+    # against, so it takes ink and sits in CONTEXT. Import/export avoid blue/orange,
+    # which already mean GNN/RF.
     "passive":        ROLE["ink"],
     "import":         SERIES[6],   # violet
     "export":         SERIES[7],   # red
 }
 
-# ---------------------------------------------------------------------------
-# SCHEMATIC -- for HTML+SVG conceptual diagrams, NOT charts.
-#
-# Deliberately a different source from SERIES: the house `scientific-figure-
-# design` skill prescribes Okabe-Ito for schematics, and the existing figures in
-# admin/presentations/group_meetings/ already use it. These are generic entity
-# SLOTS (the existing cofold_schematic.html uses chain_a/chain_b for
-# "single protein" vs "complex"), not fixed proteins -- assign per figure and
-# keep the assignment constant across a deck.
-#
-# Charts and schematics are separate figures and never share an axis, so the two
-# sources coexisting is fine. Do not mix them WITHIN one figure.
-# ---------------------------------------------------------------------------
+# SCHEMATIC -- Okabe-Ito slots for HTML+SVG conceptual diagrams, not charts.
+# Generic slots (chain_a/chain_b, ...), not fixed proteins: assign per figure and keep
+# the assignment constant across a deck. Charts and schematics never share an axis,
+# so the two sources can coexist; don't mix them within one figure.
 SCHEMATIC = {
-    "chain_a":   {"fill": "#009E73", "stroke": "#00543D"},  # cofold_schematic.html
-    "chain_b":   {"fill": "#CC79A7", "stroke": "#7A3F60"},  # ditto
+    "chain_a":   {"fill": "#009E73", "stroke": "#00543D"},
+    "chain_b":   {"fill": "#CC79A7", "stroke": "#7A3F60"},
     "chain_c":   {"fill": "#E69F00", "stroke": "#8A5E00"},
     "chain_d":   {"fill": "#0072B2", "stroke": "#00436A"},
     "chain_e":   {"fill": "#D55E00", "stroke": "#7E3800"},
@@ -197,49 +90,15 @@ SCHEMATIC = {
     "hairline":  {"fill": "#D3D9E0", "stroke": "#D3D9E0"},  # deck's --hairline
 }
 
-# ---------------------------------------------------------------------------
-# ARGUMENT -- what a thing MEANS IN THE ARGUMENT the figure is making, as
-# opposed to which protein or model it is.
+# ARGUMENT -- what a thing means in the figure's argument ("the thing that was
+# broken" vs "the thing that fixed it"), a role a different entity can occupy on
+# each slide. A separate axis from ENTITY; not in GROUPS, and checked by its own test.
 #
-# This is a genuinely different axis from ENTITY and must not be merged into it.
-# ENTITY answers "which model family is this line?" (GNN is blue in every
-# figure). ARGUMENT answers "is this the thing that was broken, or the thing
-# that fixed it?" -- a role a DIFFERENT entity occupies on each slide. The
-# 20260804_three_broken_rulers and 20260805_groove_coverage_disorder_detector
-# schematics both use it, and in each one the vermilion element is a different
-# object.
-#
-# Added 2026-08-05. Before this, both axes existed in the deck but only ENTITY
-# was registered, so the argument colours were retyped as literals in every
-# schematic -- which is the same drift this module was built to stop, just in
-# the half nobody had written down. It is NOT in GROUPS: GROUPS members are
-# validated as ENTITY names, and these are not entities. Separation is checked
-# by its own test instead.
-#
-# Values are the Okabe-Ito slots the deck already established, so adopting this
-# renames existing usage rather than changing any published figure.
-#
-# THE COLOURS COLLIDE WITH ENTITY, AND THAT IS SAFE ONLY BECAUSE OF THE MEDIUM
-# RULE BELOW. Measured 2026-08-05, after the first version of this axis shipped
-# with a test that only checked the roles against EACH OTHER:
-#
-#     entity("receptor_other") #D55E00  vs  argument("broken") #D55E00   IDENTICAL
-#     entity("GNN")            #2a78d6  vs  argument("fixed")  #0072B2   dE 6.1
-#                                                          (normal-vision floor 15)
-#
-# So the within-axis check was the wrong check: this module's premise is
-# CROSS-DECK consistency, not per-figure separation. What makes the overlap
-# harmless is the same argument SCHEMATIC already makes for itself --
-#
-#     ARGUMENT is for HTML+SVG schematics. ENTITY is for matplotlib charts.
-#     A figure uses one axis or the other, NEVER both.
-#
-# -- and the fix chosen (user decision, 2026-08-05) was to ENFORCE that rule
-# rather than recolour two slides on the morning they were presented. See
+# These colours collide with ENTITY (broken == receptor_other; fixed is dE 6.1 from
+# GNN). That is safe only because ARGUMENT is for HTML+SVG schematics and ENTITY for
+# matplotlib charts, and no figure uses both -- enforced by
 # `test_argument_axis_is_schematic_only` and `test_no_figure_mixes_the_two_axes`.
-# If a figure ever genuinely needs both, recolour ARGUMENT onto hues ENTITY does
-# not use; do not quietly let them meet.
-# ---------------------------------------------------------------------------
+# If a figure ever needs both, recolour ARGUMENT onto hues ENTITY doesn't use.
 ARGUMENT = {
     "broken":  "#D55E00",   # vermilion -- the invalidated / discarded thing
     "fixed":   "#0072B2",   # blue      -- the corrected / retained thing
@@ -265,34 +124,19 @@ def argument(name):
         ) from None
 
 
-# ---------------------------------------------------------------------------
-# SHARED_SLOTS -- entity pairs deliberately drawn in the SAME colour.
-#
-# `pose` and `GNN` are both SERIES[0]. The ENTITY comment has always said this
-# is "safe only because no figure has drawn both" -- but that was a comment, and
-# a comment does not fail. As of 2026-08-05 six plotting scripts use `pose`, four
-# use `GNN`, and none use both; `test_no_file_draws_a_shared_slot_pair` is what
-# keeps that true. When it fails, move the second member to a free SERIES slot
-# rather than deleting the test.
-# ---------------------------------------------------------------------------
+# SHARED_SLOTS -- entity pairs deliberately drawn in the same colour, safe only while
+# no figure draws both; `test_no_file_draws_a_shared_slot_pair` keeps that true. If it
+# fails, move the second member to a free SERIES slot.
 SHARED_SLOTS = (("GNN", "pose"),)
 
-# ---------------------------------------------------------------------------
-# SEQUENTIAL -- continuous ramps for density (hexbin, 2-D histograms).
+# SEQUENTIAL -- matplotlib colormap names for density (hexbin, 2-D histograms). Not
+# validated here (stdlib only); the tests check they are real colormaps.
 #
-# A fifth axis, added 2026-08-05 because `cmap="Blues"` was hardcoded in four
-# plotting scripts and nothing said what to reach for or when. Names are
-# matplotlib colormap strings and are NOT validated here on purpose: this module
-# is stdlib-only so it stays importable from envs/geometric, so the "is this a
-# real colormap" check lives in tests/test_lib_palette.py instead.
-#
-# THE RULE THAT MATTERS: a density field and the categorical marks drawn on top
-# of it must not share a hue. `density` is Blues, and SERIES[0] (#2a78d6, GNN
-# and pose) is blue -- a GNN mark on a Blues hexbin disappears into it. Use
-# `density_warm` on any axis that also carries a blue categorical mark.
-# ---------------------------------------------------------------------------
+# A density field and the categorical marks on top of it must not share a hue:
+# `density` is Blues and SERIES[0] is blue, so use `density_warm` on any axis that
+# also carries a blue categorical mark.
 SEQUENTIAL = {
-    "density":       "Blues",    # the 4 existing users; safe with no blue marks
+    "density":       "Blues",    # safe with no blue marks
     "density_warm":  "Oranges",  # when a blue categorical mark shares the axis
     "density_mono":  "Greys",    # when ANY hue would compete
     "diverging":     "RdBu_r",   # signed quantities, zero-centred
@@ -310,36 +154,9 @@ def sequential(name):
         ) from None
 
 
-# Divergences known and accepted as of 2026-08-04. Nothing has been migrated, so
-# these are a worklist, not bugs to fix silently. tests/test_lib_palette.py pins
-# this set: a NEW divergence fails the suite, an existing one does not.
-KNOWN_DIVERGENCES = {
-    # GNN -> orange, RF -> blue. The odd one out even among the 07-28 figures.
-    ("20260728_negative_tier_rebuild_figures.py", "RF"): "#0072b2",
-    ("20260728_negative_tier_rebuild_figures.py", "GNN"): "#e69f00",
-    # GNN -> green (RF -> blue implicitly, via `... else BLUE`, so RF is not
-    # named in the source and is not recorded here).
-    ("20260728_rf_v2_rank_evidence_figures.py", "GNN"): "#009e73",
-    ("20260728_size_controlled_yardstick_figures.py", "GNN"): "#009e73",
-    ("20260728_yardstick_rebuild_figures.py", "GNN"): "#009e73",
-}
-
-
-# ---------------------------------------------------------------------------
-# Entity CLASS, and the groups that actually co-appear in one figure.
-#
-# The categorical checks (lightness band, chroma floor) apply to marks doing
-# IDENTITY work. They do not apply to a context fill that is deliberately
-# neutral and light -- `background` is a violin fill behind the data, and
-# failing it for "chroma 0" would be the validator answering a question nobody
-# asked. Separation and contrast still apply to everything.
-#
-# Getting this wrong in either direction is a real failure mode: exempt too much
-# and the checks stop meaning anything; exempt too little and you chase FAILs
-# that are correct-by-design (which is what a hand-written comment in
-# 20260804_free_baselines_vs_proteome_figures.py was doing before this module
-# existed).
-# ---------------------------------------------------------------------------
+# Entity class. The lightness-band and chroma-floor checks apply to marks doing
+# identity work (CATEGORICAL), not to deliberately neutral context fills (CONTEXT),
+# e.g. a light violin background. Separation and contrast apply to everything.
 CATEGORICAL = {"GNN", "RF", "blend", "cargo", "pose", "receptor_other",
                "import", "export"}
 CONTEXT = {"baseline_free", "background", "passive"}
@@ -357,13 +174,10 @@ GROUPS = {
 
 
 def validate_registry():
-    """Validate every co-appearing GROUP with the checks appropriate to each
-    entity's class. Returns {group_name: report}.
+    """Validate every GROUP with the checks appropriate to each entity's class.
 
-    This, not `validate()`, is what the test suite asserts on: `validate()` is
-    the faithful port of the JS and treats every colour as categorical, which is
-    correct for a raw palette and wrong for a registry that mixes series marks
-    with context fills.
+    Returns {group_name: report}. Unlike `validate()`, which treats every colour
+    as categorical, this exempts CONTEXT fills from the band/chroma checks.
     """
     out = {}
     for label, (names, pairs) in GROUPS.items():
@@ -396,17 +210,10 @@ def entity(name):
             "drift this module exists to stop.") from None
 
 
-# ---------------------------------------------------------------------------
-# The validator. Ported from the dataviz skill's validate_palette.js: same
-# Machado-Oliveira-Fernandes (2009) severity-1.0 matrices, same OKLab
-# coefficients, same thresholds. The CVD thresholds are calibrated to THIS
-# simulation model, so the model is part of the standard -- swapping it would
-# require recalibrating the numbers.
-#
-# Trust is established by reproduction, not by inspection: validate_reference()
-# below must return the four values the skill's own palette.md documents before
-# any result from this code is believed.
-# ---------------------------------------------------------------------------
+# The validator: a port of the dataviz skill's validate_palette.js -- same
+# Machado-Oliveira-Fernandes (2009) severity-1.0 matrices, OKLab coefficients and
+# thresholds. The CVD thresholds are calibrated to this simulation model, so don't
+# swap the model without recalibrating. `validate_reference()` checks the port.
 BAND = {"light": (0.43, 0.77), "dark": (0.48, 0.67)}   # OKLCH L
 CHROMA_FLOOR = 0.10
 CVD_TARGET, CVD_FLOOR = 8.0, 6.0
@@ -540,10 +347,9 @@ REFERENCE_EXPECTED = {
 
 
 def validate_reference():
-    """Self-test: reproduce palette.md's documented values.
+    """Self-test: reproduce palette.md's documented values. Returns (ok, lines).
 
-    Returns (ok, report_lines). Called by figlib/tests/test_palette.py, and worth
-    calling by hand after any edit to the conversion math.
+    Run it after any edit to the conversion math.
     """
     lines, ok = [], True
     for (pairs, n), want in REFERENCE_EXPECTED.items():
@@ -557,11 +363,10 @@ def validate_reference():
 
 
 def as_css_vars(names=None, mode="light", indent="  "):
-    """Emit the registry as CSS custom properties for the HTML+SVG schematics.
+    """Emit the registry as CSS custom properties for HTML+SVG figures.
 
-    The group_meetings figures currently carry their own `--chain-a-fill:` etc.
-    Generating them from here is what keeps a schematic and a chart of the same
-    entity on one colour. Paste the output into the figure's <style> block.
+    Paste the output into the figure's <style> block, so a schematic and a chart of
+    the same entity share one colour.
     """
     roles = ROLE_DARK if mode == "dark" else ROLE
     out = [":root {"]
@@ -572,18 +377,14 @@ def as_css_vars(names=None, mode="light", indent="  "):
     for k, v in SCHEMATIC.items():
         out.append(f"{indent}--{k.replace('_', '-')}-fill: {v['fill']};")
         out.append(f"{indent}--{k.replace('_', '-')}-stroke: {v['stroke']};")
-    # Prefixed, because `--context` unprefixed would read as a chrome token next
-    # to --ink/--grid and these are argument roles, not chrome.
+    # Prefixed: an unprefixed `--context` would read as a chrome token like --ink.
     for k, v in ARGUMENT.items():
         out.append(f"{indent}--arg-{k}: {v};")
     out.append("}")
     return "\n".join(out)
 
 
-# ---------------------------------------------------------------------------
-# Drift detection. Nothing is migrated, so this is how the unmigrated state
-# stays visible instead of quietly getting worse.
-# ---------------------------------------------------------------------------
+# Drift detection: find figure sources that hardcode a colour the registry names.
 _ALIASES = {"gnn": "GNN", "rf": "RF", "blend": "blend",
             "cargo": "cargo", "pose": "pose"}
 
@@ -591,10 +392,8 @@ _ALIASES = {"gnn": "GNN", "rf": "RF", "blend": "blend",
 def _module_hex_constants(tree):
     """Module-level NAME = "#hex", including tuple unpacking.
 
-    Needed because the real scripts overwhelmingly write
-    `BLUE, GREEN, ORANGE = "#0072B2", "#009E73", "#E69F00"` and then refer to
-    the NAME. Without resolving these, a static scan sees no colours at all and
-    reports a clean repo, which is worse than not checking.
+    Scripts commonly write `BLUE, GREEN = "#0072B2", "#009E73"` and then use the
+    name; without resolving these a static scan sees no colours at all.
     """
     out = {}
     for node in tree.body:
@@ -624,22 +423,13 @@ def _resolve(node, consts):
 
 
 def scan_entity_mappings(path):
-    """Every entity->hex a Python file assigns, via AST.
+    """Every entity->hex a Python file assigns, via AST. Handles two forms:
 
-    Handles the two forms that actually occur in this repo:
+      1. a dict literal, `FAM_COLOR = {"GNN": "#2a78d6", ...}`;
+      2. a conditional, `return GREEN if m.startswith("GNN") else BLUE`.
 
-      1. a dict literal, `FAM_COLOR = {"GNN": "#2a78d6", ...}` (07-28
-         negative-tier figure, 08-03/08-04 figures);
-      2. a conditional, `return GREEN if m.startswith("GNN") else BLUE`
-         (three 07-28 figures) -- the dominant form, and invisible to a naive
-         dict scan, which is how the first version of this function reported
-         "0 divergences" on a repo with three conflicting conventions.
-
-    Only the entity NAMED in the condition is recorded; the else-branch entity is
-    implicit ("not GNN") and is not guessed.
-
-    AST rather than regex throughout, so the mapping is caught regardless of what
-    the variable is called.
+    Only the entity named in the condition is recorded; the else-branch entity is
+    implicit and not guessed.
     """
     with open(path) as fh:
         try:
@@ -671,40 +461,6 @@ def scan_entity_mappings(path):
     return found
 
 
-def _repo_root():
-    """The repository root.
-
-    This module lived at `karyoPPI/lib/palette.py` until 2026-08-17, where the
-    same two-`dirname` walk landed on the karyoPPI PROJECT dir, and the paths
-    below were written relative to that (one with a `..` to climb back out).
-    From `figlib/` the identical walk lands on the root, so both had to be
-    respelled -- silently, they resolved to directories that do not exist and
-    `drift_report()` raised FileNotFoundError. Named for what it returns now, so
-    the next move breaks loudly at the name rather than quietly at the path.
-    """
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-#: Scanned by `drift_report()`. karyoPPI's plotting dir is the historical target
-#: -- the 73 scripts and 127 colours in this module's own docstring -- and is
-#: kept as the default so the 2026-08-17 move stays behaviour-neutral.
-#: `passive_diffusion/scripts/` is NOT scanned by default: those figures reuse
-#: SERIES slots by VALUE with a comment saying so, which this scanner would read
-#: as drift. Widening the default is a real question, not an oversight -- pass
-#: `dirs=` to check them deliberately.
-def default_plotting_dir():
-    return os.path.join(_repo_root(), "karyoPPI", "scripts", "plotting")
-
-
-#: Where the HTML+SVG schematics live. Under admin/, which is LOCAL-ONLY and
-#: gitignored (see the root CLAUDE.md), so every consumer must tolerate these
-#: being absent rather than assuming a checkout has them.
-SCHEMATIC_DIRS = (
-    os.path.join(_repo_root(), "admin", "presentations", "group_meetings", "html"),
-    os.path.join(_repo_root(), "admin", "presentations", "martin_meetings"),
-)
-
-
 def all_tokens():
     """{lowercase hex: [css token names]} across every axis in the registry."""
     out = {}
@@ -722,8 +478,7 @@ def all_tokens():
     return out
 
 
-#: Below this OKLab chroma a colour is a neutral and the near-miss check is
-#: meaningless (see scan_schematic_literals).
+#: Below this OKLab chroma a colour is a neutral, and near-miss matching is skipped.
 NEUTRAL_CHROMA = 0.02
 
 _HTML_HEX_RE = re.compile(r"#[0-9a-fA-F]{6}\b")
@@ -732,16 +487,10 @@ _HTML_HEX_RE = re.compile(r"#[0-9a-fA-F]{6}\b")
 def scan_schematic_literals(path, near_miss_de=3.0):
     """Literal hex colours in an HTML schematic that the registry already names.
 
-    The chart-side `scan_entity_mappings` reads Python. The schematics are HTML
-    and were invisible to drift detection entirely until 2026-08-05, which meant
-    schematic drift could not get worse OR better in any measurable way.
-
     Returns [(hex, kind, token)] where kind is:
       "exact"     the hex IS a registered colour -- should be var(token)
-      "near"      within `near_miss_de` of one but not equal. Worse than exact:
-                  it reads as the same colour and is not, so a deck slowly
-                  acquires two almost-identical blues that nobody can see are
-                  different.
+      "near"      within `near_miss_de` of one but not equal: it reads as the same
+                  colour and isn't, so a deck drifts into near-identical blues.
     """
     tokens = all_tokens()
     with open(path, encoding="utf-8") as fh:
@@ -753,18 +502,12 @@ def scan_schematic_literals(path, near_miss_de=3.0):
             continue
         seen.add(h)
         if h in tokens:
-            # A hex can carry several names (#5B6672 is both argument("context")
-            # and SCHEMATIC["muted"]). Report all of them -- picking the first
-            # would imply the registry has one right answer when it has two
-            # equally valid ones on different axes.
+            # A hex can carry several names on different axes; report them all.
             rows.append((h, "exact", "/".join(tokens[h])))
             continue
-        # Near-miss only applies to CHROMATIC colours. Near-neutrals sit close
-        # together in OKLab by construction, so at any useful dE threshold a
-        # white page background reads as a "near-miss" against the chart
-        # surface -- 86 of the first 198 hits on this deck were exactly that.
-        # Two almost-identical dark oranges (#8f6300 vs #8A5E00) are real drift;
-        # #ffffff vs #fcfcfb is a deliberate choice about a different surface.
+        # Near-miss applies only to chromatic colours: neutrals sit close together
+        # in OKLab, so a white page would "near-miss" the chart surface. Two nearly
+        # identical dark oranges are real drift; #ffffff vs #fcfcfb is a choice.
         if oklch(h)[1] < NEUTRAL_CHROMA:
             continue
         best, best_de = None, near_miss_de
@@ -779,42 +522,64 @@ def scan_schematic_literals(path, near_miss_de=3.0):
     return rows
 
 
-def schematic_drift_report(dirs=None):
-    """[(file, hex, kind, token)] over every schematic that exists on disk."""
-    rows = []
-    for d in (dirs if dirs is not None else SCHEMATIC_DIRS):
+def _files(dirs, ext):
+    if not dirs:
+        raise TypeError("pass at least one directory to scan")
+    for d in dirs:
         if not os.path.isdir(d):
-            continue
+            raise FileNotFoundError(f"not a directory: {d}")
         for fn in sorted(os.listdir(d)):
-            if not fn.endswith(".html"):
-                continue
-            for h, kind, tok in scan_schematic_literals(os.path.join(d, fn)):
-                rows.append((fn, h, kind, tok))
-    return rows
+            if fn.endswith(ext):
+                yield os.path.join(d, fn)
 
 
-def drift_report(plotting_dir=None):
-    """[(script, entity, found_hex, registry_hex)] for every disagreement.
+def schematic_drift_report(*dirs):
+    """[(path, hex, kind, token)] for hex literals in the .html files in `dirs` that are,
+    or nearly are, registry colours (see `scan_schematic_literals`)."""
+    return [(path, h, kind, tok)
+            for path in _files(dirs, ".html")
+            for h, kind, tok in scan_schematic_literals(path)]
 
-    Only reports mappings written as a literal {entity: "#hex"} dict. A script
-    using module-level constants (`BLUE = "#0072B2"; FAM = {"RF": BLUE}`) is
-    invisible here -- the indirection defeats a static read, and resolving it
-    would mean executing the script. Those are caught by the KNOWN_DIVERGENCES
-    list instead, which is why that list is maintained by hand.
+
+def drift_report(*dirs):
+    """[(path, entity, found_hex, registry_hex)] for every {entity: hex} in the .py files in
+    `dirs` that disagrees with ENTITY.
+
+    Sees only what `scan_entity_mappings` can resolve statically; colours reached through
+    function calls or imports are invisible.
     """
-    plotting_dir = plotting_dir or default_plotting_dir()
     rows = []
-    for fn in sorted(os.listdir(plotting_dir)):
-        if not fn.endswith(".py"):
-            continue
-        for name, got in scan_entity_mappings(os.path.join(plotting_dir, fn)).items():
+    for path in _files(dirs, ".py"):
+        for name, got in scan_entity_mappings(path).items():
             want = ENTITY.get(name, "").lower()
             if want and got != want:
-                rows.append((fn, name, got, want))
+                rows.append((path, name, got, want))
     return rows
+
+
+def _print_drift(dirs):
+    rows = drift_report(*dirs)
+    print(f"=== {len(rows)} entity colour(s) that disagree with the registry ===")
+    for path, name, got, want in rows:
+        print(f"  {path}  {name}: {got} (registry {want}) -> use entity({name!r})")
+    sch = schematic_drift_report(*dirs)
+    exact = [r for r in sch if r[2] == "exact"]
+    near = [r for r in sch if r[2] == "near"]
+    print(f"\n=== HTML: {len(exact)} literal(s) that are registry colours, "
+          f"{len(near)} near-miss(es) ===")
+    for path, h, _kind, tok in near:
+        print(f"  NEAR  {path}  {h} ~ {tok}")
+    for path, h, _kind, tok in exact:
+        print(f"  exact {path}  {h} -> use var({tok})")
+    return len(rows) + len(near)
 
 
 if __name__ == "__main__":
+    import sys
+    if sys.argv[1:2] == ["drift"]:
+        if len(sys.argv) < 3:
+            sys.exit("usage: python -m figlib.palette drift DIR [DIR ...]")
+        sys.exit(1 if _print_drift(sys.argv[2:]) else 0)
     ok, lines = validate_reference()
     for l in lines:
         print(l)
@@ -832,33 +597,8 @@ if __name__ == "__main__":
 
     sch = [v["fill"] for v in list(SCHEMATIC.values())[:5]]
     r = validate(sch, pairs="all")
-    print(f"\nschematic chain slots (Okabe-Ito, separate medium)")
+    print("\nschematic chain slots (Okabe-Ito, separate medium)")
     print(f"  worst CVD {r['worst_cvd']:.1f}   worst normal-vision "
           f"{r['worst_normal']:.1f}   ok={r['ok']}")
     for w in r["warns"]:
         print(f"    WARN {w}")
-
-    plotting = default_plotting_dir()
-    if os.path.isdir(plotting):
-        rows = drift_report()
-        print(f"\n=== drift: {len(rows)} statically-visible disagreements ===")
-        for fn, name, got, want in rows:
-            print(f"  {fn}  {name}: {got} (registry {want})")
-        known = set(KNOWN_DIVERGENCES)
-        seen = {(fn, name) for fn, name, _g, _w in rows}
-        print(f"  all recorded in KNOWN_DIVERGENCES: {seen == known}")
-        if seen - known:
-            print(f"  NEW, not recorded: {sorted(seen - known)}")
-
-    sch = schematic_drift_report()
-    if sch:
-        exact = [r for r in sch if r[2] == "exact"]
-        near = [r for r in sch if r[2] == "near"]
-        print(f"\n=== schematic drift: {len(exact)} literals that are registry "
-              f"colours, {len(near)} near-misses ===")
-        for fn, h, kind, tok in near:
-            print(f"  NEAR  {fn}  {h} ~ {tok}")
-        for fn, h, kind, tok in exact[:12]:
-            print(f"  exact {fn}  {h} -> use var({tok})")
-        if len(exact) > 12:
-            print(f"  ... and {len(exact) - 12} more exact matches")

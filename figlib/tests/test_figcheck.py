@@ -1,22 +1,5 @@
-"""Tests for lib/figcheck.py, the matplotlib layout linter.
-
-Two halves, and the second matters as much as the first:
-
-  DOES IT FIRE?   Each detector gets a figure broken specifically for it. A
-                  sweep over the repo's existing figures could not establish
-                  this -- those were all hand-fixed before being saved, so
-                  OVERLAP/OUTSIDE/LEGEND never triggered and the detectors
-                  would have been indistinguishable from dead code.
-
-  DOES IT SHUT UP? A clean figure must report nothing. Two regressions found
-                  during the 2026-08-05 build are pinned here, because both
-                  produced confident, plausible, WRONG findings:
-                    - matplotlib's Tick pool retains stale label text
-                    - locator ticks outside the view limits still report a
-                      window extent
-                  and one behaviour that is correct-but-surprising:
-                    - bbox_inches="tight" EXPANDS the output, so overhanging
-                      text is not a defect.
+"""Tests for figcheck: each detector fires on a figure broken for it, and a clean figure
+reports nothing.
 """
 from __future__ import annotations
 
@@ -101,41 +84,25 @@ def test_require_raises_and_check_does_not(fig):
 
 
 def test_a_rotated_label_crossing_a_title_is_reported(fig):
-    """REGRESSION, 2026-08-13. The area rule alone could not see this.
-
-    `OVERLAP_MIN_FRAC` divides the intersection by the SMALLER BOX'S AREA. A
-    90°-rotated label piercing a horizontal title covers 100% of the title's
-    height and only a few percent of the tall label's area, so it scored under
-    the threshold and the linter printed "layout clean" on a figure where the
-    two were plainly on top of each other
-    (`passive_diffusion/figures/20260813_nls_vs_deviation.png`). Visual review
-    caught it; that is the gap `_crosses` closes.
-    """
-    ax = fig.add_subplot()
-    ax.set_title("D  a panel title wide enough to be crossed", fontsize=11)
-    # 0.85 up, so the label runs off the top of the axes and through the title
-    # exactly the way a staggered per-point annotation does.
-    ax.text(0.5, 0.85, "a tall rotated label", transform=ax.transAxes,
-            rotation=90, ha="center", va="bottom", fontsize=9)
-    found = [f for f in figcheck.check(fig) if f.kind == "OVERLAP"]
+    """A rotated label piercing a title scores under the area rule; `_crosses` catches it."""
+    # Pinned to matplotlib's bundled font: the area fraction depends on glyph metrics,
+    # and the default family resolves differently from machine to machine.
+    with plt.rc_context({"font.family": "DejaVu Sans"}):
+        ax = fig.add_subplot()
+        ax.set_title("D  a panel title wide enough to be crossed", fontsize=11)
+        # 0.85 up, so the label runs off the top of the axes and through the title
+        # exactly the way a staggered per-point annotation does.
+        ax.text(0.5, 0.85, "a tall rotated label", transform=ax.transAxes,
+                rotation=90, ha="center", va="bottom", fontsize=9)
+        found = [f for f in figcheck.check(fig) if f.kind == "OVERLAP"]
     assert found, "a rotated label piercing the title must be reported"
-    # and the point of the new rule: the area fraction alone would have passed
+    # the area fraction alone would have passed
     assert all(float(f.detail.split("%")[0].split()[-1]) < 100 * figcheck.OVERLAP_MIN_FRAC
                for f in found)
 
 
 def test_overdata_fires_on_dense_scatter_and_can_be_switched_off(fig):
-    """Was `test_overdata_is_opt_in_...` until 2026-08-17.
-
-    It asserted the opposite default, on the reasoning that in-axes annotations
-    sit on the plot area by design so a default-on check would cry wolf. What
-    changed is not the taste, it is a measurement: with the old flat threshold
-    the check could not fire on a normal-sized panel at all (17 and 18 marks
-    under two real faults, against a trigger of 20), so "off by default" meant
-    "unavailable". The threshold is relative now and the remedy silences it, so
-    the wolf-crying objection is handled by the bbox rule instead of by the
-    default. Off is still one keyword away.
-    """
+    """OVERDATA is on by default and `check_overdata=False` turns it off."""
     ax = fig.add_subplot()
     grid = [(i, j) for i in range(60) for j in range(60)]
     ax.scatter([p[0] for p in grid], [p[1] for p in grid], s=4)
@@ -166,10 +133,8 @@ def test_overdata_ignores_background_shading(fig):
 
 # ------------------------------------------------------------ does it shut up
 def test_the_crossing_rule_does_not_fire_on_grazing_stat_block_lines(fig):
-    """REGRESSION GUARD for the rule above. The area rule's tolerances were
-    tuned so a deliberately-tight stat block passes clean; the crossing rule
-    must not undo that. Two stacked lines that graze span one box's width but
-    nothing like either box's height, so they are not a crossing."""
+    """Two stacked lines that graze span one box's width but not either box's
+    height, so the crossing rule must not fire on a tight stat block."""
     ax = fig.add_subplot()
     ax.text(0.03, 0.97, "rho +0.02 (p 0.78)", transform=ax.transAxes,
             va="top", fontsize=9)
@@ -188,9 +153,8 @@ def test_a_clean_figure_reports_nothing(fig):
 
 
 def test_ticks_outside_the_view_limits_are_ignored(fig):
-    """REGRESSION. A locator tick beyond the view limits is culled at draw time
-    but still reports a window extent, off the end of the axis. Reporting those
-    produced 15 phantom OVERLAPs on the 08-05 gate matrix."""
+    """A locator tick beyond the view limits isn't drawn but still reports a
+    window extent; it must not produce phantom findings."""
     ax = fig.add_subplot()
     ax.plot([0, 1], [0, 1])
     ax.set_ylim(0.38, 1.02)                   # locator still offers 1.2
@@ -200,7 +164,7 @@ def test_ticks_outside_the_view_limits_are_ignored(fig):
 
 
 def test_stale_tick_pool_entries_are_ignored(fig):
-    """REGRESSION. matplotlib reuses Tick objects; ones dropped by a new
+    """matplotlib reuses Tick objects; ones dropped by a new
     formatter keep their old text and stay `visible`. `fig.findobj(Text)` sees
     them, the documented accessors do not."""
     ax = fig.add_subplot()
@@ -214,8 +178,7 @@ def test_stale_tick_pool_entries_are_ignored(fig):
 
 def test_tight_bbox_means_overhang_is_not_a_defect(fig):
     """bbox_inches="tight" EXPANDS the saved output rather than cropping, so
-    OUTSIDE would be a false positive. Caught on
-    20260803_confidence_stratified_figures.py, which saves tight."""
+    OUTSIDE would be a false positive."""
     fig.add_subplot()
     fig.text(1.05, 0.5, "overhangs, but tight-save keeps it", fontsize=14)
     assert "OUTSIDE" in kinds(figcheck.check(fig, crops=True))
@@ -223,12 +186,8 @@ def test_tight_bbox_means_overhang_is_not_a_defect(fig):
 
 
 def test_expanded_reports_tight_bbox_growth_and_its_likely_cause(fig):
-    """Added 2026-09-09, after the same canvas-expansion mistake landed twice in
-    one session: SMALL reported the symptom (small type) both times, and the
-    cause -- an overhanging `fig.text` growing the tight bbox past the declared
-    figsize, which shrinks the slide scale for every label -- had to be
-    rediscovered from scratch each time. EXPANDED should name the growth ratio
-    and point at the offending text."""
+    """An overhanging `fig.text` grows the tight bbox and shrinks every label on
+    the slide; EXPANDED names the growth ratio and the offending text."""
     fig.add_subplot()
     fig.text(1.6, 0.5, "a long overhanging caption pushing the tight bbox way out",
              fontsize=14)
@@ -249,11 +208,8 @@ def test_expanded_stays_quiet_on_a_normal_tight_save(fig):
 
 
 def test_install_is_idempotent_and_honours_tight(fig, capsys, tmp_path):
-    """rc_context is load-bearing, not tidiness. Four scripts under
-    scripts/plotting/ set `savefig.bbox: "tight"` in a module-level
-    rcParams.update, and importing any of them leaks it into the whole pytest
-    session -- which made this test pass alone and fail in the full suite. The
-    tool was right; the test was not controlling its environment."""
+    """rc_context pins `savefig.bbox`, which other code in the same pytest
+    process may have set globally."""
     from matplotlib.figure import Figure
     original = Figure.savefig
     with matplotlib.rc_context({"savefig.bbox": None}):
@@ -288,10 +244,8 @@ def test_install_honours_a_tight_default_from_rcparams(fig, capsys, tmp_path):
 
 
 def test_stale_output_warning_fires_when_the_script_crashes_before_saving(tmp_path, capsys):
-    """Added 2026-09-09. A crashed script leaves the PREVIOUS run's PNG/SVG on
-    disk looking exactly like a fresh one -- there is no exception recorded in
-    the figure file itself. Reproduces the actual incident: an undefined name
-    kills the script before its first savefig."""
+    """A script that dies before its first savefig leaves the previous run's
+    output looking fresh, so the CLI must warn."""
     script = tmp_path / "broken.py"
     script.write_text("raise NameError('CONTEXT is not defined')\n")
     from matplotlib.figure import Figure
@@ -324,14 +278,9 @@ def test_stale_output_warning_is_silent_when_a_save_happened(tmp_path, capsys):
         Figure.savefig = original
 
 
-# ------------------------------------------------- CLIPPED (added 2026-08-17)
-#
-# Built from the figure that shipped the fault: `20260817_size_coverage` panel A
-# drew a signal/noise ratio spanning 11 decades on an axis floored at 2e-3, and
-# 27 of its 179 points fell below the floor. The linter said "layout clean". The
-# 27 were the LARGEST proteins in the set -- the panel's own subject -- and no
-# amount of looking at the PNG could reveal them, because the failure is the
-# absence of a mark. That asymmetry is why this check is on by default.
+# ----------------------------------------------------------------- CLIPPED
+# Marks outside the limits are never drawn, so no amount of looking at the PNG
+# reveals them. That is why this check is on by default.
 def test_scatter_points_outside_the_limits_are_reported(fig):
     ax = fig.add_subplot()
     ax.scatter([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 1, 1, 1, 1, 1, 1, 9, 9, 9])
@@ -355,9 +304,8 @@ def test_the_size_coverage_fault_reproduces(fig):
 
 
 def test_a_curve_running_off_the_axes_is_NOT_clipped_data(fig):
-    """A model curve leaving the view is normal and intentional -- the probe
-    ladder draws one on purpose. Only individually meaningful marks count, so a
-    Line2D with a linestyle is never CLIPPED data."""
+    """A model curve leaving the view is normal. Only individually meaningful
+    marks count, so a Line2D with a linestyle is never CLIPPED data."""
     ax = fig.add_subplot()
     ax.plot([1, 2, 3, 4, 5], [1, 10, 100, 1000, 10000])
     ax.set_ylim(0, 50)
@@ -390,12 +338,8 @@ def test_clipped_can_be_switched_off_for_a_deliberate_zoom(fig):
 
 
 # ------------------------------------------ OVERDATA: relative and bbox-aware
-#
-# The measured failure this replaces: with the old flat OVERDATA_MIN_POINTS = 20,
-# a label parked in the DENSEST part of a 179-point panel put 18 marks under
-# itself and stayed silent, because a text box simply cannot cover 20 of 179
-# points. The check existed, was opt-in, and could not fire on the figures this
-# repo draws.
+# A text box can't cover 20 of 179 points, so a flat threshold of 20 never fires
+# on a typical panel; the threshold scales with the axes' mark count.
 def test_overdata_threshold_is_relative_to_the_axes_density():
     assert figcheck._overdata_threshold(179) == 9
     assert figcheck._overdata_threshold(5000) == figcheck.OVERDATA_MIN_POINTS
@@ -403,7 +347,7 @@ def test_overdata_threshold_is_relative_to_the_axes_density():
 
 
 def test_label_on_a_sparse_cloud_now_fires(fig):
-    """~15 marks under a label on a 179-point panel: silent before, caught now."""
+    """~15 marks under a label on a 179-point panel is reported."""
     ax = fig.add_subplot()
     xs = [i / 100 for i in range(179)]
     ax.scatter(xs, [0.5] * 179)
@@ -437,9 +381,7 @@ def test_a_translucent_bbox_does_not_count_as_remediated(fig):
 
 
 def test_report_prints_every_kind_it_counts(fig, capsys):
-    """OVERDATA was missing from report()'s kind tuple until 2026-08-17, so it
-    was counted in the total and then never printed -- a finding you cannot read
-    is worse than no finding."""
+    """Every kind check() can return is printed by report(), not just counted."""
     ax = fig.add_subplot()
     xs = [i / 100 for i in range(179)]
     ax.scatter(xs, [0.5] * 179)
@@ -453,14 +395,8 @@ def test_report_prints_every_kind_it_counts(fig, capsys):
 
 
 def test_a_label_inside_a_vertical_shaded_band_is_not_a_bar(fig):
-    """`axvspan` is background shading, same as `axhspan`.
-
-    BACKGROUND_PATCH_FRAC's comment named axvspan from the start but the code
-    tested width only, so a full-height band -- narrow by construction -- scored
-    as a bar covering 100% of any label inside it. Found 2026-08-17 the first
-    time OVERDATA ran by default: six annotations inside one shaded window on
-    `20260817_size_coverage` were all reported as covered "by bars".
-    """
+    """`axvspan` is background shading, same as `axhspan`, even though a
+    full-height band is narrow."""
     ax = fig.add_subplot()
     ax.scatter([1, 2, 3, 4, 5], [1, 2, 3, 4, 5])
     ax.axvspan(2, 3, color="blue", alpha=0.1)
@@ -478,10 +414,9 @@ def test_a_horizontal_band_is_still_exempt(fig):
 
 
 def test_full_height_bars_are_still_judged_as_bars(fig):
-    """The counter-case to the axvspan fix, and why `_is_background_patch` asks
-    how the patch is pinned rather than only how big it is: bars reaching the top
-    of the axes render exactly like a vertical band, and exempting them would
-    have silently undone `test_overdata_sees_bars_by_area_not_by_count`."""
+    """Counter-case to the axvspan test: bars reaching the top of the axes look
+    like a vertical band, which is why `_is_background_patch` checks how the
+    patch is pinned, not just its size."""
     ax = fig.add_subplot()
     ax.bar(range(10), [10] * 10)            # every bar spans the full height
     ax.text(4.5, 5, "sitting on the bars", ha="center", fontsize=12)
@@ -489,9 +424,7 @@ def test_full_height_bars_are_still_judged_as_bars(fig):
 
 
 def test_a_panel_can_declare_its_zoom_deliberate(fig):
-    """Per-axes opt-out, because the whole-figure switch is too blunt: a linear
-    detail panel beside a log full-range panel is the honest reason to clip, and
-    silencing the figure would also silence the panel that is not zoomed."""
+    """CLIP_OK_GID silences one zoomed panel while its neighbour is still checked."""
     axA = fig.add_subplot(121)
     axB = fig.add_subplot(122)
     for ax in (axA, axB):
@@ -504,9 +437,8 @@ def test_a_panel_can_declare_its_zoom_deliberate(fig):
 
 def test_errorbar_caps_are_not_counted_as_data_marks(fig):
     """An errorbar's caps and bar collections are decoration of one mark, not
-    marks. Counting them made a 23-point literature figure report "10 of 57"
-    when the honest count was 2 of 23 -- and the LineCollection's default
-    offset of [0, 0] reads as a mark at the origin, usually outside the limits."""
+    marks (and the collection's default [0, 0] offset would read as a mark at
+    the origin)."""
     ax = fig.add_subplot()
     ax.errorbar([1, 2, 3], [1, 1, 1], yerr=[0.1, 0.1, 0.1], fmt="o", capsize=3)
     ax.set_xlim(0.5, 3.5)
@@ -515,11 +447,10 @@ def test_errorbar_caps_are_not_counted_as_data_marks(fig):
     assert "CLIPPED" not in kinds(figcheck.check(fig))
 
 
-# ------------------------------------------------- OVERLINE (added 2026-09-09)
+# ---------------------------------------------------------------- OVERLINE
 def test_a_label_sitting_directly_on_a_plain_line_is_reported(fig):
-    """The exact miss from today: a plain `ax.plot` curve has no markers for
-    OVERDATA to count and is not a patch, so a label placed on top of it must
-    be caught by a dedicated check instead."""
+    """A plain `ax.plot` curve has no markers for OVERDATA to count, so a label
+    on top of it is caught by OVERLINE."""
     ax = fig.add_subplot()
     ax.plot([0, 1, 2, 3, 4], [0, 1, 2, 3, 4])
     ax.text(2, 2, "sitting right on the curve", ha="center", va="center",
@@ -529,9 +460,7 @@ def test_a_label_sitting_directly_on_a_plain_line_is_reported(fig):
 
 
 def test_overdata_alone_would_have_missed_it(fig):
-    """REGRESSION GUARD documenting the actual failure mode: a marker-less line
-    contributes zero marks, so `_axes_mark_count` -- and therefore OVERDATA's
-    every threshold -- sees this axes as empty."""
+    """A marker-less line contributes zero marks, so OVERDATA sees this axes as empty."""
     ax = fig.add_subplot()
     ax.plot([0, 1, 2, 3, 4], [0, 1, 2, 3, 4])
     assert figcheck._axes_mark_count(ax) == 0
@@ -552,9 +481,7 @@ def test_overline_can_be_switched_off(fig):
 
 
 def test_an_opaque_bbox_silences_overline_too(fig):
-    """Same remedy as OVERDATA: an opaque backing patch is the documented fix,
-    and the check must honour it instead of flagging the correctly-backed
-    label as a fault."""
+    """Same remedy as OVERDATA: an opaque backing patch counts as fixed."""
     ax = fig.add_subplot()
     ax.plot([0, 1, 2, 3, 4], [0, 1, 2, 3, 4])
     ax.text(2, 2, "backed label", ha="center", va="center", fontsize=12,
@@ -563,16 +490,8 @@ def test_an_opaque_bbox_silences_overline_too(fig):
 
 
 def test_overline_ignores_an_annotation_arrows_reach_toward_the_curve(fig):
-    """REGRESSION, found 2026-09-09 auditing a real figure.
-
-    `Annotation.get_window_extent()` unions the arrow patch's bbox into the
-    text's reported extent (so a tight save does not clip the arrow). An
-    annotation arrow is designed to reach from its caption to the data point
-    it names, so leaving that union in makes the label's footprint include
-    its own reach toward the data -- a callout can sit nowhere near a curve on
-    screen and still "collide" with it because its arrow tip touches the
-    curve, which is the entire point of drawing the arrow there.
-    """
+    """`Annotation.get_window_extent()` includes the arrow, which reaches the
+    data by design; only the caption's own box is checked."""
     ax = fig.add_subplot()
     ax.plot([0, 1, 2, 3, 4], [0, 1, 2, 1, 1])
     ax.annotate("callout text, well clear of the curve", xy=(2, 2), xytext=(2, -1),
@@ -581,12 +500,8 @@ def test_overline_ignores_an_annotation_arrows_reach_toward_the_curve(fig):
 
 
 def test_overline_exempts_a_value_labelling_its_own_point_on_the_line(fig):
-    """The dominant house pattern found sweeping the repo 2026-09-09: a value
-    written at the exact point on a bracket/rung/threshold line it reports,
-    via `ax.annotate(f"{v:.1f}", xy=(x, y), xytext=(dx, dy),
-    textcoords="offset points")`. That `xy` sits AS CLOSE to the line as a
-    label can get by construction, which is not the accidental case OVERLINE
-    exists for and would otherwise dominate its false-positive rate."""
+    """A value annotated at its own point on a line (`ax.annotate(f"{v:.1f}",
+    xy=(x, y), xytext=..., textcoords="offset points")`) is not a collision."""
     ax = fig.add_subplot()
     ax.plot([0, 1, 2], [1.1, 1.1, 1.1], lw=4.5, solid_capstyle="butt")
     ax.annotate("1.1", xy=(0, 1.1), xytext=(0, -6), textcoords="offset points",
@@ -609,11 +524,8 @@ def test_overline_still_fires_when_the_collision_is_with_an_unrelated_line(fig):
 
 
 def test_overline_ignores_an_axhline_reference_threshold(fig):
-    """Second dominant house pattern found in the same sweep: a full-panel
-    `axhline`/`axvline` threshold marker spans the whole axes by construction,
-    so a caption placed anywhere near that value would otherwise always
-    collide with it -- that is not the same failure as a caption sitting on a
-    real measurement curve."""
+    """A full-panel `axhline`/`axvline` reference spans the whole axes, so a
+    caption near it is not a collision."""
     ax = fig.add_subplot()
     ax.plot([0, 1, 2], [0, 1, 2])
     ax.axhline(1.0, color="black")
@@ -630,9 +542,7 @@ def test_overline_ignores_an_axvline_reference_threshold(fig):
 
 
 def test_overline_still_fires_on_a_real_curve_near_an_axhline(fig):
-    """REGRESSION GUARD: the axhline exemption must not blanket-exempt the
-    whole axes -- a real curve sitting under a label must still be reported
-    even when an unrelated axhline is also present."""
+    """The axhline exemption is per line: a real curve under the label still fires."""
     ax = fig.add_subplot()
     ax.plot([0, 1, 2, 3, 4], [0, 1, 2, 1, 1])
     ax.axhline(-5.0, color="black")           # far away, should not matter
@@ -651,10 +561,10 @@ def test_a_curve_running_under_a_title_or_tick_label_is_not_reported(fig):
     assert "OVERLINE" not in kinds(figcheck.check(fig))
 
 
-# ------------------------------------------------ COLORROLE (added 2026-09-09)
+# --------------------------------------------------------------- COLORROLE
 def test_color_role_reuse_across_axes_is_reported_when_enabled(fig):
-    """The actual incident: green meant one thing in one panel and a different
-    thing in another. Opt-in, so it must be silent unless asked for."""
+    """Green means one thing in one panel and another thing in the next.
+    Opt-in, so it must be silent unless asked for."""
     axA = fig.add_subplot(121)
     axA.plot([0, 1], [0, 1], color="green", label="raw")
     axA.legend()
@@ -681,14 +591,8 @@ def test_color_role_reuse_is_fine_when_the_label_is_the_same(fig):
 
 
 def test_color_role_reads_marker_only_legend_proxies_correctly(fig):
-    """REGRESSION, found sweeping the repo 2026-09-09 on
-    `20260826_probe_ladder_revised.py`. That figure's legend is built from
-    marker-only Line2D proxies (`Line2D([], [], marker="o", ls="", mfc=colour,
-    mec="white")`, the house pattern for a scatter legend). `get_color()` is
-    always present on a Line2D and was checked first, so it read the LINE
-    colour's unset placeholder ("C0") instead of the marker face colour that
-    is actually visible -- manufacturing a COLORROLE finding across four
-    entries that were visibly orange/green/blue/white on screen."""
+    """Marker-only legend proxies (`Line2D([], [], marker="o", ls="", mfc=c)`)
+    are read by marker colour, not the unset line colour "C0"."""
     from matplotlib.lines import Line2D
     ax = fig.add_subplot()
     ax.plot([0], [0])                                         # give the axes data

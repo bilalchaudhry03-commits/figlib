@@ -70,8 +70,21 @@ def test_missing_clip_placeholder_in_storyboard_and_refused_in_draft(tmp_path):
     plt.close(fig)
 
 
-def test_manim_command_binds_repo_and_sets_quality(tmp_path):
+def test_manim_command_binds_repo_and_sets_quality(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIGLIB_MANIM_SIF", "/images/manim.sif")
     cmd = clip.manim_command(tmp_path / "m.py", "Morph", tmp_path / "out", "draft")
-    assert cmd[:2] == ["apptainer", "exec"] and str(clip.SIF) in cmd
+    assert cmd[:2] == ["apptainer", "exec"] and "/images/manim.sif" in cmd
     assert "960,540" in cmd and "15" in cmd and cmd[-1] == "Morph"
     assert any(str(clip.ROOT) in a for a in cmd)
+
+
+def test_manim_image_explicit_sif_beats_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIGLIB_MANIM_SIF", "/images/env.sif")
+    cmd = clip.manim_command(tmp_path / "m.py", "Morph", tmp_path / "out", sif="/images/arg.sif")
+    assert "/images/arg.sif" in cmd and "/images/env.sif" not in cmd
+
+
+def test_manim_image_without_env_or_arg_is_a_clear_error(tmp_path, monkeypatch):
+    monkeypatch.delenv("FIGLIB_MANIM_SIF", raising=False)
+    with pytest.raises(RuntimeError, match="FIGLIB_MANIM_SIF"):
+        clip.manim_command(tmp_path / "m.py", "Morph", tmp_path / "out")

@@ -1,13 +1,7 @@
-"""Regression tests for figlib.export_svg's style baking.
+"""Tests for export_svg's style baking: each element pins a class-set property (fill:none,
+stroke-width, dasharray, ...) that the standalone SVG must carry without the page's stylesheet.
 
-Found 2026-10-19 on generals Fig 5A: the exporter baked class-set fill/stroke
-COLOURS into attributes but dropped `fill:none`, `stroke-width` and
-`stroke-dasharray`. A `.outline{fill:none}` circle drawn over an oocyte
-imported with SVG's default black fill -- every oocyte came out solid black --
-and a dashed class-set circle came out solid. Each element below pins one
-property that the standalone SVG must carry without the page's stylesheet.
-
-Needs headless Chromium (playwright), so the whole export runs once per module.
+Needs headless Chromium, so the export runs once per module.
 """
 
 from __future__ import annotations
@@ -64,8 +58,8 @@ FIXTURE = """<!doctype html>
   <text id="badge" class="muted" fill="#ffffff" x="120" y="90">1</text>
   <g id="halfg" class="half"><rect x="160" y="10" width="10" height="10" fill="#000000"/></g>
   <path id="inline" style="fill:none;stroke:#333333;stroke-dasharray:2,2" d="M60 60 L100 60"/>
-  <!-- the Fig 5A workaround shape: attributes already written, px and commas included -->
-  <circle id="workaround" class="dash" fill="none" stroke-width="1.2px"
+  <!-- styles already written as attributes, with px units and commas -->
+  <circle id="preset" class="dash" fill="none" stroke-width="1.2px"
           stroke-dasharray="4, 3" cx="180" cy="70" r="10"/>
 </svg>
 </body></html>
@@ -136,10 +130,8 @@ def test_class_stroke_width_beats_width_attribute(exported):
 
 
 def test_authored_colour_recoloured_by_class_is_kept(exported):
-    """Pre-1.2.0 colour behaviour, kept on purpose: deck figures author white
-    numerals on dark badges whose `.tag` class greys them on screen; the
-    attribute is the intent. Only a class that turns the paint to `none`
-    overrides an authored colour."""
+    """An authored colour attribute is the intent when a class merely recolours it;
+    only a class that turns the paint to `none` overrides it."""
     _, _, el = exported
     assert el["badge"].get("fill") == "#ffffff"
 
@@ -159,9 +151,9 @@ def test_defaults_are_not_baked(exported):
     assert plain.get("stroke") is None
 
 
-def test_fig5a_workaround_attributes_still_export(exported):
+def test_styles_already_written_as_attributes_still_export(exported):
     _, _, el = exported
-    w = el["workaround"]
+    w = el["preset"]
     assert w.get("fill") == "none"
     assert _nums(w.get("stroke-width")) == [1.2]
     assert _nums(w.get("stroke-dasharray")) == [4.0, 3.0]
@@ -173,8 +165,7 @@ def test_provenance_stamp_names_this_version(exported):
 
 
 def test_outline_circle_renders_hollow(exported, tmp_path):
-    """End to end, the way the bug was seen: render the SVG without its page
-    and look at the middle of the outline-only circle. Black there is the bug."""
+    """Render the SVG without its page: the outline-only circle must be hollow, not black."""
     cairosvg = pytest.importorskip("cairosvg")
     import io
     from PIL import Image

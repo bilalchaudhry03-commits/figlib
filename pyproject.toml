@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "figlib"
 version = "0.1.0"
 description = "Figure tooling for slides and papers: layout linters, an HTML-to-SVG exporter, a CVD-checked palette, and .pptx assembly."
 readme = "README.md"
+license = "MIT AND OFL-1.1"
+license-files = ["LICENSE", "figlib/fonts/OFL.txt"]
 requires-python = ">=3.10"
 # Core = figcheck, palette, fonts, inputs. Everything else is behind an extra so a
 # matplotlib-only user does not pull in Chromium or python-pptx.
@@ -23,4 +25,4 @@ test = ["figlib[all]", "pytest>=7"]
 include = ["figlib*"]
 
 [tool.setuptools.package-data]
-figlib = ["fonts/*.ttf", "fonts/OFL.txt", "CLAUDE.md", "tests/*.py"]   # tests/ has no __init__.py
+figlib = ["fonts/*.ttf", "fonts/OFL.txt", "tests/*.py"]   # tests/ has no __init__.py

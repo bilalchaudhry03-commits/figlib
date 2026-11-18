@@ -1,37 +1,14 @@
 """Frames -> MP4 (for slides) + GIF (for Slack) + poster PNG + contact sheet.
 
-Added 2026-10-30. Source-agnostic: pass any iterable of RGB frames (PIL images or
-HxWx3 uint8 arrays) -- matplotlib canvases, Playwright screenshots, PyMOL PNGs.
+Takes any iterable of RGB frames (PIL images or HxWx3 uint8 arrays) and streams them into
+the ffmpeg bundled with imageio-ffmpeg.
 
     from figlib import anim
     out = anim.write(frames, Path("figs/ensemble"), fps=24)
-    # out.mp4, out.gif, out.poster, out.contact
+    # out.mp4, out.gif, out.poster, out.contact, out.clipped
 
-Why it is shaped like this:
-
-* **Frames stream into ffmpeg's stdin**, never through a directory of PNGs. A 10 s clip
-  at 24 fps is 240 files per take, and the cluster rules call many-small-files a design
-  smell. The one exception is a renderer that can only write files (PyMOL): give it a
-  per-job scratch folder and delete it after, as `pymol_frames` does.
-* **ffmpeg is the one bundled with `imageio-ffmpeg`** in `envs/analysis` (7.0.2, libx264 +
-  gif). No system ffmpeg on Argo, nothing to install.
-* **MP4 is H.264 / yuv420p / +faststart with even dimensions**: the combination PowerPoint
-  on Windows and macOS both play without a codec pack. yuv420p requires even width and
-  height, so odd frames are padded by one pixel rather than failing in the encoder.
-* **The GIF is made from the MP4 with a two-pass palette** (palettegen -> paletteuse).
-  A one-pass GIF uses ffmpeg's generic 256-colour palette and bands every gradient.
-* **The contact sheet is the QA artifact for motion.** The LibreOffice -> PDF deck check
-  shows a video slide as its poster only, so this is the only way to review the frames
-  without opening PowerPoint. Thumbnails are kept at a stride that doubles as the clip
-  grows: keeping every one cost ~170 KB a frame, ~0.8 GB for a 2.7 min explainer.
-* **`bg` is the frame's background**, used for the edge check and the encoder's pad.
-  Hard-coded white flagged every frame of a dark explainer as clipped (2026-11-02).
-* **The poster defaults to the middle frame**, pulled back out of the MP4: frame 0 of a video
-  that fades in from black is a blank poster (2026-11-02).
-* **`delivery_copy` makes a <30 MiB copy** for sending: a 2 min 1080p final at crf 18 is
-  ~42 MB, over SendUserFile's limit.
-* **The GIF is skipped above 20 s unless asked for.** A minutes-long GIF is tens of MB,
-  loops with no pause, and nobody watches it in Slack.
+The contact sheet is how to review motion without opening PowerPoint; `out.clipped` lists
+frames whose content touches the edge.
 """
 
 from __future__ import annotations
@@ -69,14 +46,14 @@ def _rgb(frame) -> np.ndarray:
 def touches_edge(a: np.ndarray, bg=(255, 255, 255), tol: int = 24) -> bool:
     """True if any non-background pixel sits on the frame border.
 
-    The animation analogue of figcheck's CLIPPED: a molecule cut off by the camera is
-    invisible in review -- you cannot see the part that was never drawn -- so count it.
+    The animation analogue of figcheck's CLIPPED: content cut off by the camera is
+    invisible in review, so it has to be counted.
     """
     edge = np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]]).astype(int)
     return bool((np.abs(edge - np.array(bg)).max(axis=1) > tol).any())
 
 
-GIF_MAX_S = 20     # gif=None writes a GIF only for clips up to this long
+GIF_MAX_S = 20     # gif=None writes a GIF only for clips up to this long; longer ones are tens of MB
 
 
 def write(frames, stem: Path, *, fps: int = 24, crf: int = 18, gif: bool | None = None,
@@ -100,6 +77,8 @@ def write(frames, stem: Path, *, fps: int = 24, crf: int = 18, gif: bool | None 
             a = _rgb(frame)
             if proc is None:
                 size = a.shape[1], a.shape[0]
+                # H.264 / yuv420p / faststart plays in PowerPoint on Windows and macOS
+                # without a codec pack; yuv420p needs even dimensions, hence the pad.
                 proc = subprocess.Popen(
                     [FFMPEG, "-y", "-loglevel", "error",
                      "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{size[0]}x{size[1]}",
@@ -130,7 +109,7 @@ def write(frames, stem: Path, *, fps: int = 24, crf: int = 18, gif: bool | None 
     if n == 0:
         raise ValueError("no frames")
 
-    if poster_index is None:
+    if poster_index is None:   # middle frame: frame 0 of a fade-in is blank
         subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-ss", f"{(n // 2) / fps:.4f}",
                         "-i", str(mp4), "-frames:v", "1", str(poster)], check=True)
 
@@ -138,6 +117,7 @@ def write(frames, stem: Path, *, fps: int = 24, crf: int = 18, gif: bool | None 
     if gif or (gif is None and n / fps <= GIF_MAX_S):
         gif_path = stem.with_suffix(".gif")
         flt = f"fps={gif_fps},scale={gif_width}:-1:flags=lanczos"
+        # two-pass palette; ffmpeg's generic 256-colour palette bands every gradient
         subprocess.run(
             [FFMPEG, "-y", "-loglevel", "error", "-i", str(mp4), "-filter_complex",
              f"[0:v]{flt},split[a][b];[a]palettegen=stats_mode=diff[p];"

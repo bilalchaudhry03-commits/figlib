@@ -1,9 +1,4 @@
-"""Tests for the figure-build modules added 2026-08-27.
-
-Each test pins a behaviour that was got WRONG first, on the principle the rest
-of this repo's tests follow: a test that only restates the happy path would not
-have caught any of these.
-"""
+"""Tests for fonts and inputs."""
 
 from __future__ import annotations
 
@@ -31,9 +26,7 @@ def test_carlito_is_vendored_with_its_licence():
 
 
 def test_declared_stack_names_calibri_first():
-    """Calibri leads because the PRESENTING machine has it; Carlito is the
-    stand-in for machines that do not. Reversing them would ship a deck that
-    renders in the substitute even where the real face is installed."""
+    """Calibri leads so the real face wins where installed; Carlito is the stand-in."""
     assert fonts.STACK.startswith("Calibri")
     assert fonts.STACK_LIST[0] == "Calibri"
     assert "Carlito" in fonts.STACK_LIST
@@ -47,14 +40,11 @@ def test_register_is_idempotent_and_finds_carlito():
 
 
 def test_ensure_visible_points_at_the_repo_copy_not_a_duplicate():
-    """One copy of the fonts, in the repo. The first attempt COPIED them to a
-    repo-root .local/share/fonts, which duplicated 2.7 MB and left two
-    directories to keep in step."""
+    """One copy of the fonts, in the package: a symlink, not a copy."""
     link = Path(fonts.ensure_visible())
     assert link.exists()
     assert link.is_symlink(), f"{link} should be a symlink, not a real directory"
     assert link.resolve() == fonts.FONT_DIR.resolve()
-
 
 
 def test_ensure_visible_links_inside_an_existing_fonts_dir(tmp_path, monkeypatch):
@@ -116,8 +106,7 @@ def _export(tmp_path, body, *flags):
 
 
 def test_export_stamps_its_version(tmp_path):
-    """Provenance. Without it, "did the exporter change or did the figure?"
-    is unanswerable, which is what moving these tools into the repo was for."""
+    """Provenance: an SVG says which exporter version made it."""
     r, dst = _export(tmp_path, '<text x="10" y="40" font-size="40">hi</text>')
     assert r.returncode == 0, r.stderr
     stamp = re.search(r'<metadata id="figlib-provenance">([^<]*)</metadata>', dst.read_text())
@@ -126,9 +115,7 @@ def test_export_stamps_its_version(tmp_path):
 
 
 def test_markers_are_baked_into_geometry(tmp_path):
-    """orient="auto-start-reverse" is SVG 2. Illustrator and PowerPoint are
-    SVG 1.1 and fall back to NO rotation, so an arrowhead arrives as a bare
-    unrotated triangle -- the defect this replaced."""
+    """Markers become rotated geometry: SVG 1.1 consumers ignore auto-start-reverse."""
     body = ('<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" '
             'markerWidth="6" markerHeight="6" orient="auto-start-reverse">'
             '<path d="M0,0 L10,5 L0,10 z" fill="#000"/></marker></defs>'
@@ -145,10 +132,7 @@ def test_markers_are_baked_into_geometry(tmp_path):
 # -------------------------------------------------------------- check_layout
 
 def test_glyph_gap_check_finds_characters_the_deck_font_lacks():
-    """U+2713/U+2717 are absent from Calibri AND Carlito -- they live in Segoe UI
-    Symbol on Windows. Slide 28 shipped four of them as tofu because the build
-    machine was falling back to DejaVu, which has them. This check is what turns
-    that from a render-and-squint into a lint."""
+    """U+2713/U+2717 are in neither Calibri nor Carlito, though fallback fonts render them."""
     from figlib.check_layout import glyph_gaps
     gaps = glyph_gaps([{"text": "correct ✓"}, {"text": "wrong ✗"}, {"text": "fine →"}])
     codes = {c for _, c, _ in gaps}

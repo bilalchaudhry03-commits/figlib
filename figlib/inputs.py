@@ -1,25 +1,11 @@
-"""Declare a figure script's data inputs, and fail readably when one is gone.
-
-The failure this exists to prevent, observed 2026-08-27:
-
-    FileNotFoundError: [Errno 2] No such file or directory:
-    '/Genomics/.../massspec/diann_runs/20260615_exp2_oocyte_staging/output/report.stats.tsv'
-
-That is a raw pandas traceback 200 lines into a script, after the imports and
-the first half of the analysis have already run. It says what is missing but not
-what the script was for, whether the file ever existed, or whether the figure it
-feeds is still in the deck. A declared input list turns it into one line at the
-top, before any work, naming every missing file at once rather than the first.
-
-Usage -- declare beside the paths, check before doing anything:
+"""Declare a figure script's data inputs, and fail readably when one is missing.
 
     from figlib.inputs import require
+    SRC = ROOT / "data/quadrants.csv"
+    require(SRC, why="the 2x2 quadrants; built by make_quadrants.py")
 
-    SRC = ROOT / "karyoPPI/data/import/20260804_abstention_gate_quadrants.csv"
-    require(SRC, why="the 2x2 abstention quadrants; built by 20260804_abstention_gate.py")
-
-Convention for new figure scripts: every path the script READS goes through
-`require()` at module level. Paths it WRITES do not -- those are created.
+Call it at module level for every path the script reads, so a missing file fails in one
+line before any work runs, naming every missing input at once.
 """
 
 from __future__ import annotations
@@ -29,20 +15,15 @@ from pathlib import Path
 
 
 class MissingInput(FileNotFoundError):
-    """Raised when a declared input is absent. Subclasses FileNotFoundError so
-    an existing `except FileNotFoundError` still catches it."""
+    """A declared input is absent. Still caught by `except FileNotFoundError`."""
 
 
 def require(*paths, why: str = "", exit_code: int | None = 2) -> list[Path]:
-    """Assert every path exists. Report ALL missing ones, not just the first.
+    """Check every path exists, reporting all the missing ones, not just the first.
 
-    `why` is one line about what the data is and what produced it -- the thing
-    a reader needs and a bare path never carries.
-
-    With `exit_code` set (the default) this exits the process with a clean
-    message rather than a traceback, because a missing input is an environment
-    problem and a traceback buries that in stack frames. Pass `exit_code=None`
-    to raise `MissingInput` instead, which is what tests want.
+    `why` says what the data is and what produced it. By default a missing input
+    exits with a clean message instead of a traceback; pass `exit_code=None` to
+    raise `MissingInput` instead (e.g. in tests).
     """
     resolved = [Path(p) for p in paths]
     missing = [p for p in resolved if not p.exists()]

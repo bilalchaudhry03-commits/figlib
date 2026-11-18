@@ -34,6 +34,24 @@ python -m figlib.fonts     # links the font into ~/.fonts so Chromium can find i
 
 `check_layout` and `export_svg` also do this themselves the first time they run.
 
+## Using it with Claude Code
+
+This repo is also a Claude Code plugin with three skills:
+- `figlib`: use figlib's checks (and rules like "never hide clipped data") whenever you ask for
+  figures, SVG exports, decks or videos;
+- `scientific-figure-design`: how to design a schematic or diagram that reads in 30 seconds on a slide;
+- `explainer-video`: how to make a teaching video whose model is checked before anything is drawn.
+
+```bash
+claude plugin marketplace add bilalchaudhry03-commits/figlib
+claude plugin install figlib@figlib
+```
+
+Or inside a session: `/plugin marketplace add bilalchaudhry03-commits/figlib`, then `/plugin install figlib@figlib`.
+It uses your existing GitHub SSH key (loaded in ssh-agent) to read this private repo. Claude picks
+the skills up automatically; you can also call one directly, e.g. `/figlib:figlib`. To get updates:
+`claude plugin marketplace update figlib`, then `claude plugin update figlib@figlib`.
+
 ## The tools
 
 ### `figcheck`: lint a matplotlib figure before you save it
@@ -86,6 +104,8 @@ print(pal.as_css_vars())                           # CSS variables to paste into
 
 The named colours (`pal.entity("GNN")`, `pal.argument("broken")`, …) are the ones from Bilal's slides. Use them if you want your figures to match; otherwise use `validate` on your own colours.
 
+`python -m figlib.palette drift scripts/ html/` lists hardcoded colours that disagree with the named ones, or HTML literals that should be CSS variables.
+
 ### `deck`: build a `.pptx` from Python
 
 `deck` builds on python-pptx:
@@ -103,8 +123,7 @@ The house style is in the `Theme` class.
 - `inputs.require(path, why=...)`: declare a script's input files, so a missing one fails on line 1 with a clear message.
 - `anim.write(frames, stem)`: frames → MP4, a poster frame and a contact sheet, using ffmpeg from `imageio-ffmpeg`.
 - `scene`, `clip`: used for explainer videos.
-  - `clip` renders Manim clips with the lab's Apptainer image on Argo.
-  - To use a different image, set `FIGLIB_MANIM_SIF`.
+  - `clip` renders Manim clips inside an Apptainer image. Set `FIGLIB_MANIM_SIF` to the image's path (on Argo, the lab's is `/Genomics/wuehrlab/People/Bilal/envs/manim/manim.sif`), or pass `sif=`.
 
 ## Tests
 
@@ -115,8 +134,8 @@ pytest "$(python -c 'import figlib, pathlib; print(pathlib.Path(figlib.__file__)
 
 ## Background
 
-`figlib/CLAUDE.md` explains why each tool works the way it does, including the bugs that led to most of these checks. Claude Code reads it automatically when it works in this repo.
+`figlib/CLAUDE.md` has notes for working on the code (Claude Code reads it automatically).
 
 This repo started on 2026-11-17 as a copy of the `figlib/` folder in Bilal's lab repo. That folder's earlier history is still there.
 
-The Carlito font is under the SIL Open Font License (`figlib/fonts/OFL.txt`).
+figlib is under the MIT License (`LICENSE`). The bundled Carlito font is under the SIL Open Font License (`figlib/fonts/OFL.txt`).

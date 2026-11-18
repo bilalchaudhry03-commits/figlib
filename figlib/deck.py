@@ -1,28 +1,8 @@
-"""Build .pptx decks: figures as SVG-with-PNG-fallback, MP4 movies, a house template, and a linter.
+"""Build .pptx decks: SVG figures with PNG fallback, equations, MP4 movies, a house template, and a linter.
 
-Lifted out of `admin/presentations/group_meetings/py/20260826_build_group_meeting_deck.py`
-on 2026-10-30. That script lived under `admin/`, which is gitignored -- so the deck
-builder was in the same unversioned-tool failure mode `figlib/CLAUDE.md` records for the
-old exporter. What moved here is everything that is not about one talk: slide sizing,
-picture embedding, movies, notes, naming, and the template. Each talk keeps its own
-content (outline/manifest) and its own short build script that calls into this.
-
-**Figures go in as SVG with a PNG fallback**, which is why this is more than
-`add_picture`. OOXML requires the picture's primary blip to be a raster; vector is
-carried as an `asvg:svgBlip` extension on that blip (the `{96DAC541-...}` ext uri).
-PowerPoint 2019/365 renders the SVG -- the figure arrives as vector, with the
-presenter's own fonts, and `Graphics Format > Convert to Shape` still works on it.
-Anything older falls back to the raster. python-pptx has no API for this, hence the XML
-by hand in `add_svg_picture`. The fallbacks are rasterised with cairosvg on Argo, which
-has no Calibri (Carlito stands in), so do not judge a figure by its fallback.
-
-**No secondary text, by construction.** The user's rule (CLAUDE.md, 2026-10-20): title +
-main content only; no subtitles, captions, sub-bullets or status lines; the small grey
-footer is the one exception. The 08-26 builder broke it itself -- its title slide wrote a
-grey 18pt subtitle -- because the rule existed only as prose. So here there is no
-subtitle or caption parameter anywhere, and `lint_deck` fails the build on any
-non-footer text that is grey or below the size floor. The footer is recognised by shape
-name (`FOOTER_NAME`), not by position, so a caption cannot sneak in by sitting low.
+Each talk keeps its own content and a short build script; this holds the reusable parts.
+Slides are title + main content only: there is no subtitle or caption parameter, and
+`require_clean(prs)` fails the build on non-footer text that is grey or under 18 pt.
 """
 
 from __future__ import annotations
@@ -52,13 +32,13 @@ NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 SLIDE_W, SLIDE_H = Emu(12192000), Emu(6858000)
 FALLBACK_PX_WIDTH = 2400
 
-FOOTER_NAME = "figlib-footer"   # the one shape lint_deck lets be small and grey
+FOOTER_NAME = "figlib-footer"   # the one shape lint_deck lets be small and grey; matched by
+                                # name, not position, so a caption can't pass by sitting low
 MIN_BODY_PT = 18                # slide text floor; figures have their own (9pt) via figcheck
 
 INK = "1A242E"
 MUTED = "5A6673"                # footer only
-# Sampled from the official shield files (PU_mark.svg: fill #f58025), 2026-10-30. The
-# first template guessed E77500, which sat visibly darker than the shield beside it.
+# Sampled from the official shield file (PU_mark.svg).
 PRINCETON_ORANGE = "F58025"
 
 
@@ -208,8 +188,7 @@ def content_slide(prs, theme: Theme, title: str, footer: str = "", *, name: str 
     s = _blank(prs)
     W = SLIDE_W
     m = Inches(0.5)
-    # Sized for a TWO-line title at title_pt: assertion titles often wrap, and a 0.9 in box
-    # let the second line spill into the first bullet (generals deck, 2026-10-30).
+    # Sized for a two-line title at title_pt, since assertion titles often wrap.
     _text(s, (m, Inches(0.3), W - 2 * m - Inches(0.6), Inches(1.1)), title, pt=theme.title_pt,
           bold=True, color=theme.ink, font=theme.font, anchor=MSO_ANCHOR.MIDDLE)
     top = Inches(1.6)
@@ -233,7 +212,10 @@ def bullets(slide, box, items: list[str], theme: Theme):
 # --------------------------------------------------------------------------- pictures
 
 def fallback_png(svg: Path, cache_dir: Path) -> Path:
-    """Rasterise `svg` into `cache_dir`, reusing an up-to-date render."""
+    """Rasterise `svg` into `cache_dir`, reusing an up-to-date render.
+
+    Rendered with Carlito standing in for Calibri, so judge the figure by its SVG, not this.
+    """
     cache_dir.mkdir(parents=True, exist_ok=True)
     png = cache_dir / (svg.stem + ".png")
     if not png.exists() or png.stat().st_mtime < svg.stat().st_mtime:
@@ -249,13 +231,10 @@ _ATTR_FAMILY = re.compile(r'(font-family=")([^"]+)(")')
 def calibri_first(svg: bytes) -> bytes:
     """Put Calibri at the head of every font-family list that lacks it.
 
-    matplotlib must lay out mathtext with a real font file, so figure scripts point
-    `mathtext.rm/it/bf` at Carlito -- and with `svg.fonttype: none` it then writes the
-    *file's* name as the only family: `font-family: 'Carlito'`. No presenter's machine has
-    Carlito, so PowerPoint substituted its default and every tau, k_pas and C_n came out in
-    a different face and spacing (generals deck 2026-10-30: 345 of 445 text elements across
-    three figures). Carlito is metric-identical to Calibri, so naming Calibri first changes
-    no layout; on Argo fontconfig still resolves it to Carlito.
+    Figure scripts lay out mathtext in Carlito, and matplotlib then writes
+    `font-family: 'Carlito'` alone. Presenting machines don't have Carlito, so PowerPoint
+    would substitute its default face. Carlito is metric-identical to Calibri, so naming
+    Calibri first changes no layout, and fontconfig still resolves it to Carlito here.
     """
     def css(m):
         v = m.group(2)
@@ -285,7 +264,12 @@ def add_svg_picture(slide, svg: Path, png: Path, box):
 
 
 def _attach_svg(slide, pic, svg: Path):
-    """Carry `svg` on `pic`'s raster blip as the asvg:svgBlip extension (see module doc)."""
+    """Carry `svg` on `pic`'s raster blip as the asvg:svgBlip extension.
+
+    OOXML requires a picture's primary blip to be raster; vector rides along as this
+    extension. PowerPoint 2019/365 renders the SVG (and "Convert to Shape" works on it);
+    older versions show the PNG. python-pptx has no API for it, hence the raw XML.
+    """
     package = slide.part.package
     part = Part(package.next_partname("/ppt/media/image%d.svg"), "image/svg+xml",
                 package, calibri_first(svg.read_bytes()))
@@ -321,16 +305,13 @@ def render_equation_parts(texs: list[str], cache_dir: Path, *, pt: int = EQUATIO
                           color: str = INK) -> list[tuple[Path, Path, float, float]]:
     """Typeset pieces of ONE equation line (mathtext, no $) that will sit side by side on a slide.
 
-    Each piece is drawn on an identical canvas at the same baseline, then all pieces are cropped to
-    the SAME vertical extent (the union of their ink), so placed at one `top` their baselines and
-    fraction bars line up -- this is how a derivation reveals "≈ V_n/k_pas" after the full form
-    (2026-11-13). Horizontally each piece is cropped to its own ink. Returns, per piece,
-    (svg, png, width_in, height_in) at NATURAL size; `pt` is the size it will have on the slide.
+    Each piece is drawn on an identical canvas at the same baseline and all are cropped to the
+    same vertical extent, so placed at one `top` their baselines and fraction bars line up (e.g.
+    to reveal "≈ simpler form" after the full form). Horizontally each is cropped to its own ink.
+    Returns, per piece, (svg, png, width_in, height_in) at natural size; `pt` is the slide size.
 
-    Glyphs are written as vector PATHS, not text (2026-11-13): with `svg.fonttype: none`, a glyph
-    Carlito lacks (\\cdot, U+22C5) fell back to another face in the file, PowerPoint then looked it
-    up in Calibri, found nothing, and drew a blank -- the multiplication dots vanished. An equation
-    is never edited as text, so outlines cost nothing and need no font on the presenting machine.
+    Glyphs are written as paths, not text: a glyph Carlito lacks (e.g. \\cdot) would otherwise
+    fall back to another face, and PowerPoint draws it blank.
     """
     import hashlib
     import logging
@@ -393,10 +374,8 @@ def render_equation(tex: str, cache_dir: Path, *, pt: int = EQUATION_PT,
                     color: str = INK) -> tuple[Path, Path, float, float]:
     """One equation, as SVG (glyph outlines) + 300 dpi PNG; see `render_equation_parts`.
 
-    Added 2026-11-13 for the generals talk (user: "add equation support to the deck builder"). An
-    equation is a picture, so `lint_deck` cannot see its type size; the floor is enforced here
-    instead: `pt` is the size it will have on the slide, because `add_equation` never scales it.
-    Maths in Carlito (metric twin of the deck's Calibri), as the figure scripts do.
+    `lint_deck` can't see type inside a picture, so the size floor is enforced here: `pt` is
+    the size on the slide, because `add_equation` never scales it.
     """
     return render_equation_parts([tex], cache_dir, pt=pt, color=color)[0]
 
@@ -421,13 +400,10 @@ def add_equation(slide, tex: str, box, cache_dir: Path, *, pt: int = EQUATION_PT
 def add_equation_column(slide, lines: list, box, cache_dir: Path, *, pt: int = EQUATION_PT):
     """Stack equation lines top-down, left-aligned, in `box` (a derivation); return pictures per line.
 
-    Added 2026-11-13 for the generals talk's derivation slide. A line is a string, or a list of
-    strings: the pieces of one line placed side by side on a shared baseline
-    (`render_equation_parts`), so a deck can reveal the rest of a line on a later click. Returns one
-    list of pictures per line. Same rules as `add_equation`: natural size, never scaled, so a line
-    too wide for the column or a stack too tall for the box is an error, not a silent shrink. The
-    leftover height is shared out as equal gaps between lines (no larger than the line height), and
-    the stack is centred vertically in the box.
+    A line is a string, or a list of pieces placed side by side on a shared baseline (so a later
+    click can reveal the rest of a line). Natural size, never scaled: a line too wide or a stack
+    too tall is an error. Spare height becomes equal gaps (at most one line height), and the
+    stack is centred vertically.
     """
     left, top, width, height = box
     lines = [[ln] if isinstance(ln, str) else list(ln) for ln in lines]
@@ -461,9 +437,8 @@ def add_equation_column(slide, lines: list, box, cache_dir: Path, *, pt: int = E
 def add_movie(slide, mp4: Path, poster: Path, box):
     """Embed an MP4 fitted to `box`, with `poster` as the frame shown when not playing.
 
-    MP4 rather than GIF for slides: a GIF is 256 colours (structure renders band), large,
-    and loops with no pause. The poster is also what LibreOffice/PDF QA renders -- the
-    contact sheet from `figlib.anim` is the QA artifact for the motion itself.
+    MP4 rather than GIF: a GIF is 256 colours, large, and loops with no pause. LibreOffice/PDF
+    renders show only the poster; review the motion with `figlib.anim`'s contact sheet.
     """
     probe = slide.shapes.add_picture(str(poster), 0, 0)
     w0, h0 = probe.width, probe.height
@@ -479,11 +454,9 @@ def add_movie(slide, mp4: Path, poster: Path, box):
 def build_on_click(slide, shapes, *, dur_ms: int = 100) -> None:
     """Fade `shapes` in one per click, in order (PowerPoint entrance effect "Fade", preset 10).
 
-    Added 2026-11-09 for the generals talk's panel-by-panel builds: the figure is exported as
-    one transparent SVG per layer, all placed in the same box, and every layer after the
-    first gets one of these. python-pptx has no animation API, so this writes `p:timing` by
-    hand. LibreOffice/PDF renders show every layer at once; the build itself can only be
-    checked in PowerPoint.
+    For panel-by-panel builds, export one transparent SVG per layer into the same box. python-pptx
+    has no animation API, so this writes `p:timing` by hand. LibreOffice/PDF renders show every
+    layer at once; check the build in PowerPoint.
     """
     if not shapes:
         return
@@ -517,10 +490,10 @@ def _set_timing(slide, clicks: list[str]) -> None:
         f'restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" '
         f'nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>'
         + "".join(clicks) +
-        f'</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl>'
-        f'<p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond '
-        f'evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
-        f'</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>'
+        '</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl>'
+        '<p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond '
+        'evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
+        '</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>'
     )
     sld = slide._element
     old = sld.find(qn("p:timing"))
@@ -535,9 +508,9 @@ def _set_timing(slide, clicks: list[str]) -> None:
 
 
 def animate(slide, steps, *, slide_w: int, slide_h: int) -> None:
-    """Click-driven animation with fades in and out AND motion paths (added 2026-11-17 for the
-    generals talk's Ran-cycle slide: "use transitions / movement to make it obvious how stuff is
-    moving"). `steps` is one entry per click; each click is a list of PHASES that play one after
+    """Click-driven animation with fades in and out and motion paths.
+
+    `steps` is one entry per click; each click is a list of PHASES that play one after
     another without a further click; each phase is a list of effects that play together:
 
         ("in", shape, ms) | ("out", shape, ms) | ("move", shape, ms, dx_emu, dy_emu)

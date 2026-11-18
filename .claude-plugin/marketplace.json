@@ -1,0 +1,12 @@
+{
+  "name": "figlib",
+  "owner": { "name": "Wühr lab" },
+  "description": "Claude Code plugin for the figlib figure toolkit",
+  "plugins": [
+    {
+      "name": "figlib",
+      "source": "./plugins/figlib",
+      "description": "Teaches Claude to make and check figures, SVG exports, decks and videos with figlib"
+    }
+  ]
+}

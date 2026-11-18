@@ -108,7 +108,7 @@ def test_anim_long_dark_clip_skips_gif_and_is_not_clipped(tmp_path):
     frames = (np.full((40, 64, 3), dark, np.uint8) for _ in range(50))   # 25 s at 2 fps
     out = anim.write(frames, tmp_path / "dark", fps=2, contact_n=3, bg=dark)
     assert out.gif is None                       # > GIF_MAX_S, not asked for
-    assert out.clipped == ()                     # was every frame with bg hard-coded white
+    assert out.clipped == ()                     # a uniform dark frame matches bg=dark
     assert Image.open(out.contact).size == (4 * 64, 40)   # 4 columns, one row of 3 thumbs
 
 
