@@ -115,7 +115,7 @@ pytest "$(python -c 'import figlib, pathlib; print(pathlib.Path(figlib.__file__)
 
 ## Background
 
-`figlib/CLAUDE.md` explains why each tool works the way it does, including the bugs that led to most of these checks. Claude Code reads it automatically when it works in this repo.
+`figlib/CLAUDE.md` has notes for working on the code (Claude Code reads it automatically).
 
 This repo started on 2026-11-17 as a copy of the `figlib/` folder in Bilal's lab repo. That folder's earlier history is still there.
 

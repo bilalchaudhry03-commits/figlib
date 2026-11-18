@@ -23,4 +23,4 @@ test = ["figlib[all]", "pytest>=7"]
 include = ["figlib*"]
 
 [tool.setuptools.package-data]
-figlib = ["fonts/*.ttf", "fonts/OFL.txt", "CLAUDE.md", "tests/*.py"]   # tests/ has no __init__.py
+figlib = ["fonts/*.ttf", "fonts/OFL.txt", "tests/*.py"]   # tests/ has no __init__.py
