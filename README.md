@@ -36,8 +36,11 @@ python -m figlib.fonts     # links the font into ~/.fonts so Chromium can find i
 
 ## Using it with Claude Code
 
-This repo is also a Claude Code plugin. Its skill teaches Claude to use figlib's checks (and rules
-like "never hide clipped data") whenever you ask it for figures, SVG exports, decks or videos.
+This repo is also a Claude Code plugin with three skills:
+- `figlib`: use figlib's checks (and rules like "never hide clipped data") whenever you ask for
+  figures, SVG exports, decks or videos;
+- `scientific-figure-design`: how to design a schematic or diagram that reads in 30 seconds on a slide;
+- `explainer-video`: how to make a teaching video whose model is checked before anything is drawn.
 
 ```bash
 claude plugin marketplace add bilalchaudhry03-commits/figlib
@@ -46,7 +49,7 @@ claude plugin install figlib@figlib
 
 Or inside a session: `/plugin marketplace add bilalchaudhry03-commits/figlib`, then `/plugin install figlib@figlib`.
 It uses your existing GitHub SSH key (loaded in ssh-agent) to read this private repo. Claude picks
-the skill up automatically; you can also call it with `/figlib:figlib`. To get updates:
+the skills up automatically; you can also call one directly, e.g. `/figlib:figlib`. To get updates:
 `claude plugin marketplace update figlib`, then `claude plugin update figlib@figlib`.
 
 ## The tools

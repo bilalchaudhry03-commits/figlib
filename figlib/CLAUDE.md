@@ -38,10 +38,13 @@ for labmates); this file is for working on the code.
 
 ## Claude Code plugin
 
-`.claude-plugin/marketplace.json` + `plugins/figlib/` make this repo a plugin marketplace; the skill is
-`plugins/figlib/skills/figlib/` (`SKILL.md`, plus `references/decks.md` and `references/video.md`).
-It is what labmates' Claude knows about figlib, so **update it when a public API or a usage rule
-changes**. No `version` is set, so installs track commits. Check with `claude plugin validate .`.
+`.claude-plugin/marketplace.json` + `plugins/figlib/` make this repo a plugin marketplace with three
+skills under `plugins/figlib/skills/`: `figlib` (the API and checks; `references/decks.md`,
+`references/video.md`), `scientific-figure-design` (how to design a schematic: layout, colour roles,
+type arithmetic, export traps) and `explainer-video` (workflow and gates). The last two are the
+de-labbed versions of Bilal's personal `scientific-figure-design` and wuhrlab's `explainer-video`
+skills (2026-11-18). They are what labmates' Claude knows about figlib, so **update them when a
+public API or a usage rule changes**. No `version` is set, so installs track commits. Check with `claude plugin validate .`.
 
 ## Things that aren't obvious from the code
 
@@ -95,8 +98,8 @@ changes**. No `version` is set, so installs track commits. Check with `claude pl
 - `anim.write`: `bg=` sets the edge-check and pad colour; the GIF is skipped above 20 s unless
   `gif=True`; the poster is the middle frame. `anim.delivery_copy(mp4)` makes a 720p copy under the
   30 MiB SendUserFile cap.
-- Explainer workflow and gates: `.claude/skills/explainer-video/SKILL.md` (wuhrlab); outputs go in
-  `explainers/YYYYMMDD_topic/`.
+- Explainer workflow and gates: `plugins/figlib/skills/explainer-video/SKILL.md`; in wuhrlab, outputs
+  go in `explainers/YYYYMMDD_topic/`.
 
 ## Tests
 

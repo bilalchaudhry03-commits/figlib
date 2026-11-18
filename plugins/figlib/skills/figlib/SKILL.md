@@ -80,5 +80,8 @@ colours — use them only to match those figures.
 
 ## More
 
+- Designing a schematic or diagram (layout, colour roles, type sizing, export traps): use the
+  `scientific-figure-design` skill.
+- Making an explainer video (workflow, model checks, content rules): use the `explainer-video` skill.
 - Building a `.pptx`: read [references/decks.md](references/decks.md).
 - Animations, MP4/GIF, explainer videos: read [references/video.md](references/video.md).
