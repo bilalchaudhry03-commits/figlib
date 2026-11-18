@@ -17,9 +17,15 @@ There are three parts:
 You need access to this private repo and an SSH key on GitHub.
 
 ```bash
-pip install "figlib @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git"          # matplotlib linter + palette only
-pip install "figlib[all] @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git"     # everything
+pip install "figlib @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.1.0"          # matplotlib linter + palette only
+pip install "figlib[all] @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.1.0"     # everything
 ```
+
+The `@v0.1.0` pins a release, so your scripts don't change under you when `main` does. To upgrade, re-run
+the line with the newer tag (listed under the repo's Tags). Drop the `@v…` to track `main` instead.
+
+**Where it runs.** Tested on Linux (Argo). The HTML tools (`check_layout`, `export_svg`) are Argo/Linux-only
+for now: on a Mac or Windows they may crash or silently measure the wrong font. The matplotlib tools work anywhere.
 
 The extras:
 - `html` installs `check_layout` and `export_svg`. Run `playwright install chromium` once afterwards.
