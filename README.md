@@ -136,4 +136,4 @@ pytest "$(python -c 'import figlib, pathlib; print(pathlib.Path(figlib.__file__)
 
 This repo started on 2026-11-17 as a copy of the `figlib/` folder in Bilal's lab repo. That folder's earlier history is still there.
 
-The Carlito font is under the SIL Open Font License (`figlib/fonts/OFL.txt`).
+figlib is under the MIT License (`LICENSE`). The bundled Carlito font is under the SIL Open Font License (`figlib/fonts/OFL.txt`).
