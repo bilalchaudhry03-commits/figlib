@@ -213,3 +213,10 @@ def test_build_id_survives_a_git_that_cannot_run(monkeypatch):
         assert figlib.build_id().startswith(figlib.__version__)
     finally:
         figlib.build_id.cache_clear()
+
+
+
+def test_check_layout_leaves_monospace_code_labels_alone(tmp_path):
+    """Code labels in Consolas are deliberate; FONT is for Calibri text measured in the wrong face."""
+    r = _check_layout(tmp_path, "Consolas, 'Courier New', monospace")
+    assert r.returncode == 0 and "FONT" not in r.stdout, r.stdout + r.stderr

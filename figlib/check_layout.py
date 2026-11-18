@@ -9,7 +9,7 @@ Checks, in headless Chromium:
   SMALL TYPE  text renders below --min-pt once the figure is fitted to a slide
   MISSING GLYPH  a character the deck font (Carlito/Calibri) can't draw
   FONT        a text style that doesn't render with Calibri/Carlito metrics, so the
-              layout was measured in a face PowerPoint won't use
+              layout was measured in a face PowerPoint won't use (monospace stacks are skipped)
 
 Text over shapes is not checked: most labels sit on a panel rect by design.
 Exits 1 on any finding, so it can gate an export.

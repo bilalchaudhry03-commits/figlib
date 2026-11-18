@@ -139,8 +139,12 @@ def font_mismatches(page, tol: float = FONT_TOL) -> list[dict]:
     One entry per distinct (style, weight, family) used by an SVG text element:
     {family, weight, style, sample, ratio}, where ratio is the test string's width in that
     style over its width in Carlito. Only entries with |ratio - 1| > tol are returned.
+
+    Styles declaring a monospace stack are skipped: code labels set in Consolas on purpose are not a
+    font mistake (6 of the lab's group-meeting figures, which this check failed in 0.2.0-0.2.3).
     """
-    return [r for r in page.evaluate(_PROBE_JS) if abs(r["ratio"] - 1) > tol]
+    return [r for r in page.evaluate(_PROBE_JS)
+            if "monospace" not in r["family"].lower() and abs(r["ratio"] - 1) > tol]
 
 
 register()

@@ -70,7 +70,8 @@ figlib skill's setup block; commit; `git tag -a vX.Y.Z`; push the tag.
   A stylesheet added after load is too late; ~/.fonts only works where Chromium uses fontconfig. Since
   2026-11-18 (exporter 1.3.0, check_layout 1.2.0); before that the tools symlinked ~/.fonts, which
   would have crashed on Windows and been ignored on macOS. `check_layout` then measures each distinct
-  text style against Carlito and reports FONT if any differs by > 0.5%.
+  text style against Carlito and reports FONT if any differs by > 0.5% (monospace stacks skipped: code
+  labels in Consolas are deliberate; 0.2.0-0.2.3 failed 6 lab figures for them).
 - `python -m figlib.fonts` (the ~/.fonts link) is now optional, for other Chromium use on Linux.
   Importing `figlib.fonts` only registers with matplotlib.
 - Don't copy the TTFs anywhere. One copy, in the repo.
