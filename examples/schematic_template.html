@@ -12,10 +12,9 @@ What it already does right (keep these when you edit):
   = 16:9 viewBox (1600 x 900), so 1 unit = 0.6 pt on a widescreen slide: 28 px body = 16.8 pt.
   = Font stack Calibri, Arial, Helvetica, sans-serif (figlib.fonts.STACK). The figlib tools
     measure it in Carlito, which has Calibri's exact widths.
-  = Colours come from CSS variables set as presentation attributes or class rules, never inline
-    style="fill:var(...)" (that form does not survive export).
+  = Colours come from CSS variables set as presentation attributes or class rules, one way per
+    property (a class rule silently beats an attribute).
   = Geometry that depends on text width is computed by the script below, after the font exists.
-  = Comment dividers use '=' only: a double hyphen inside a comment makes the exported SVG invalid.
 Colour tokens: python -c "from figlib import palette; print(palette.as_css_vars(names=[]))"
 -->
 <style>

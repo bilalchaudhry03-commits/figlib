@@ -2,8 +2,9 @@
 type: llm
 ---
 
+Judge from Claude's final message.
+
 A good run:
-- measures the problem with figlib's check_layout rather than guessing (the labels render near 7 pt on a slide);
-- raises the text to slide size (roughly 18 px or more in this 1700-wide viewBox, so 10 pt+) and grows or
-  re-lays-out the boxes so the longer labels still fit inside them;
-- ends with check_layout clean, and looks at the result (e.g. a screenshot) rather than relying on the linter alone.
+- says the labels were measured with figlib's check_layout (around 7 pt on a slide) rather than guessed;
+- says the text was raised to slide size (10 pt or more) and the boxes grown or re-laid-out so labels fit;
+- says check_layout is clean afterwards, and that it looked at the result.

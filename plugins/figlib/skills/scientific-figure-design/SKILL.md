@@ -111,14 +111,12 @@ the spoken explanation read this correctly in 30 seconds?
 ## Authoring rules that survive export
 
 `python -m figlib.export_svg fig.html fig.svg --group` turns the live page into a standalone SVG.
-It handles script-computed geometry, CSS variables, missing intrinsic size and SVG 2 arrowheads for
-you. Two things it can't fix, so author around them:
+It handles script-computed geometry, CSS variables (in attributes, class rules and inline
+`style=`), missing intrinsic size, SVG 2 arrowheads and XML-invalid `--` in comments for you, so
+don't hand-patch the SVG for any of those; if an export looks wrong, fix the HTML or report it.
 
-- **Set colours with presentation attributes (`fill="var(--x)"`) or class rules, never inline
-  `style="fill:var(--x)"`.** Inline-style variables ship unresolved, and the colour drops out on
-  import. Use one mechanism per property: a class rule silently beats an attribute.
-- **Use `=` for comment dividers, never runs of `-`.** A double hyphen inside an XML comment makes
-  the whole file invalid, and Illustrator/PowerPoint report a parse error on a line that looks fine.
+One authoring rule still matters on screen: set each property one way (an attribute or a class
+rule, not both), because a class rule silently beats an attribute.
 
 Read the line the exporter prints. It reports the size it emitted, and a figure sized to slide
 *height* is telling you it is taller than 16:9 and its type will render small.

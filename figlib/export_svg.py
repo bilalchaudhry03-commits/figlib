@@ -19,7 +19,7 @@ from playwright.sync_api import sync_playwright
 import figlib
 from figlib import fonts as _fonts
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 DEFAULT_SLIDE = (13.333, 7.5)   # PowerPoint 16:9 widescreen, inches
 
@@ -129,6 +129,24 @@ RESOLVE_JS = """
         const implied = attr === 'opacity' ? '1' : inh[attr];
         if (cur !== implied) el.setAttribute(attr, cur);
       }
+    }
+    // An inline style="fill:var(--x)" outranks the attribute baked above, and in the
+    // standalone file --x is undefined, so the shape draws black or grey in
+    // PowerPoint/Illustrator. Drop every inline declaration that uses var(), writing
+    // its resolved value as an attribute first if nothing above did.
+    const style = el.getAttribute('style');
+    if (style && style.includes('var(')) {
+      const keep = [];
+      for (const decl of style.split(';')) {
+        const i = decl.indexOf(':');
+        if (i < 0) continue;
+        const prop = decl.slice(0, i).trim(), val = decl.slice(i + 1);
+        if (!val.includes('var(')) { keep.push(decl.trim()); continue; }
+        const resolved = (computed.getPropertyValue(prop) || '').trim();
+        if (resolved && !el.hasAttribute(prop)) el.setAttribute(prop, norm(prop, resolved));
+      }
+      if (keep.length) el.setAttribute('style', keep.join('; '));
+      else el.removeAttribute('style');
     }
     // What a child inherits in the STANDALONE file: this element's attributes
     // (as now baked), else whatever its own ancestors supplied.

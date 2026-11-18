@@ -1,6 +1,6 @@
 ---
 type: tool_used
-tool: Write
-input_match: 'figcheck\.(?:require|report|check)\('
+tool: Bash
+input_match: 'figcheck\.(?:require|report|check)\(|-m figlib\.figcheck'
 min: 1
 ---

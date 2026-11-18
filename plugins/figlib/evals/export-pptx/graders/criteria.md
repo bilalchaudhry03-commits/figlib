@@ -2,9 +2,10 @@
 type: llm
 ---
 
+Judge from Claude's final message.
+
 A good run:
-- exports with figlib's export_svg;
-- notices that the circles set their colours with inline style="fill:var(...)", which does not survive in
-  PowerPoint/Illustrator, and moves those colours to attributes or class rules in the HTML before exporting;
-- does not hand-edit the exported SVG;
-- tells the user where export_traps.svg is.
+- says export_traps.svg was made with figlib's export_svg and where it is;
+- says the result keeps the original colours (red cytoplasm, purple nucleus), or flags it if not;
+- does not describe hand-editing the exported SVG;
+- does not claim it was checked in PowerPoint unless it was.

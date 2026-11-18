@@ -59,6 +59,8 @@ FIXTURE = """<!doctype html>
   <text id="badge" class="muted" fill="#ffffff" x="120" y="90">1</text>
   <g id="halfg" class="half"><rect x="160" y="10" width="10" height="10" fill="#000000"/></g>
   <path id="inline" style="fill:none;stroke:#333333;stroke-dasharray:2,2" d="M60 60 L100 60"/>
+  <!-- an inline custom-property colour: resolved AND dropped, or it outranks the baked attribute -->
+  <circle id="inlinevar" style="fill:var(--ink); stroke-linecap:round" cx="150" cy="30" r="8"/>
   <!-- styles already written as attributes, with px units and commas -->
   <circle id="preset" class="dash" fill="none" stroke-width="1.2px"
           stroke-dasharray="4, 3" cx="180" cy="70" r="10"/>
@@ -183,3 +185,11 @@ def test_provenance_stamp_names_the_exporter_and_the_figlib_build(exported):
     stamp = re.search(r'<metadata id="figlib-provenance">(.*?)</metadata>', out.read_text()).group(1)
     assert f"figlib.export_svg {export_svg.__version__}" in stamp
     assert f"figlib {figlib.build_id()}" in stamp and "source=fixture.html" in stamp
+
+
+def test_inline_var_declarations_are_resolved_and_dropped(exported):
+    out, _, el = exported
+    c = el["inlinevar"]
+    assert c.get("fill") == "rgb(51, 51, 51)"
+    assert "var(" not in (c.get("style") or "") and "stroke-linecap:round" in c.get("style")
+    assert "var(" not in out.read_text()

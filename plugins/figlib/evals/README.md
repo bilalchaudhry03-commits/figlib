@@ -3,7 +3,11 @@
 Graders look at what Claude RAN or WROTE (tool_used on Bash/Write inputs), never regex over the whole
 trace: the trace includes the skill text, which itself mentions figcheck/check_layout/export_svg, so a
 trace regex passes without the tool ever running (smoke test 13567243). The one trace regex left,
-'clean — no overflow', is check_layout's own output and appears in no skill.
+'clean — no overflow', is check_layout's own output and appears in no skill. In this sandbox Claude
+writes scripts with `cat > f.py <<EOF` in Bash rather than the Write tool, so code checks match Bash input.
+
+LLM criteria must be checkable from Claude's final message: that is all the judge sees. Asking it
+whether the PNG has a title fails good runs (quick-bar, 2026-11-18).
 
 Cases are realistic labmate requests; `_fixtures/` holds their input files, copied in by each case's
 `scaffold.sh`. On Argo, run them through `scripts/20261118_figlib_plugin_eval_argo.sbatch` in the wuhrlab

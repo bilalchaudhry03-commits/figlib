@@ -2,8 +2,10 @@
 type: llm
 ---
 
+Judge from Claude's final message.
+
 A good run:
-- saves import_bars.png with the four bars in the given order and values;
-- labels the y axis (relative nuclear import) and sizes text for a projected slide;
-- runs figlib's figcheck on the figure before saving;
-- does not add a chart title or caption that repeats what the slide title will say, and keeps the answer short.
+- says import_bars.png was saved with the four bars and their values (1.0, 0.35, 1.8, 0.4) in the given order;
+- says what the y axis is labelled;
+- says the figure was checked with figlib (figcheck) and the result;
+- is short: a few lines, not an essay.
