@@ -47,8 +47,15 @@ deck.add_equation_column(slide, [line1, [piece_a, piece_b]], box, cache)       #
   transparent SVG per layer into the same box.
 - `animate(slide, steps, slide_w=prs.slide_width, slide_h=prs.slide_height)`: one entry per click; each
   click is a list of phases played in turn; each phase is a list of effects played together:
-  `("in", shape, ms)`, `("out", shape, ms)`, `("move", shape, ms, dx_emu, dy_emu)`. Give each move as
-  the step it takes; chained moves are tracked for you.
+  `("in", shape, ms)`, `("out", shape, ms)`, `("move", shape, ms, dx_emu, dy_emu)`, and
+  `("play", movie, ms)` for a movie from `add_movie` (ms = its length). Give each move as the step it
+  takes; chained moves are tracked for you.
+- `animate(..., auto=[phase, ...], loop=[movie])`: `auto` runs when the slide opens (no click), e.g. a
+  background movie; movies in `loop` repeat until the slide ends. Pattern for "motion until I click,
+  then something happens": `auto=[[("play", bg, ms)]]`, `loop=[bg]`, and on the click
+  `[("out", bg, 300), ("in", next_movie, 300), ("play", next_movie, ms)]`. PowerPoint can't know which
+  frame of a loop is showing at the click, so a crossfade is the seam; start the next movie from the
+  loop's first frame and make the loop's last frame equal its first.
 - LibreOffice/PDF renders show every layer at its start position, so builds and animations can only be
   checked in PowerPoint. Say so when handing a deck over.
 

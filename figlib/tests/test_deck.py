@@ -196,6 +196,49 @@ def test_animate_moves_accumulate_and_phases_chain(tmp_path):
     assert len(ids) == len(set(ids))
 
 
+def test_animate_plays_movies_auto_and_on_click(tmp_path):
+    """A looping background movie starts with the slide; a click swaps it for a second movie."""
+    from PIL import Image
+    poster = tmp_path / "p.png"
+    Image.new("RGB", (160, 69), "white").save(poster)
+    mp4 = tmp_path / "m.mp4"
+    mp4.write_bytes(b"\x00\x00\x00\x18ftypmp42")          # python-pptx embeds the bytes as given
+    prs, s, box = _deck_with_content(deck.Theme())
+    bgm, split = deck.add_movie(s, mp4, poster, box), deck.add_movie(s, mp4, poster, box)
+    W, H = prs.slide_width, prs.slide_height
+    deck.animate(s, [[[("out", bgm, 300), ("in", split, 300), ("play", split, 2600)]]],
+                 slide_w=W, slide_h=H, auto=[[("play", bgm, 16000)]], loop=[bgm])
+    out = tmp_path / "d.pptx"
+    prs.save(out)
+    from pptx import Presentation
+    t = Presentation(out).slides[1]._element.find(deck.qn("p:timing"))
+    seq = t.find(".//" + deck.qn("p:cTn") + "[@nodeType='mainSeq']").find(deck.qn("p:childTnLst"))
+    assert len(seq) == 2                                                  # the auto start + one click
+    begin = seq[0].find(deck.qn("p:cTn")).find(deck.qn("p:stCondLst"))
+    assert [c.get("evt") for c in begin] == [None, "onBegin"]             # starts with the slide
+    cmds = [(c.get("cmd"), c.find(".//" + deck.qn("p:spTgt")).get("spid")) for c in t.iter(deck.qn("p:cmd"))]
+    assert cmds == [("playFrom(0.0)", str(bgm.shape_id)), ("playFrom(0.0)", str(split.shape_id))]
+    nodes = {n.find(".//" + deck.qn("p:spTgt")).get("spid"): n.find(deck.qn("p:cTn")).get("repeatCount")
+             for n in t.iter(deck.qn("p:cMediaNode"))}
+    assert nodes == {str(bgm.shape_id): "indefinite", str(split.shape_id): None}   # one node per movie
+    classes = [c.get("presetClass") for c in t.iter(deck.qn("p:cTn")) if c.get("presetClass")]
+    assert classes == ["mediacall", "exit", "entr", "mediacall"]
+    ids = [int(c.get("id")) for c in t.iter(deck.qn("p:cTn"))]
+    assert len(ids) == len(set(ids))
+
+
+def test_animate_refuses_a_loop_that_never_plays(tmp_path):
+    from PIL import Image
+    poster = tmp_path / "p.png"
+    Image.new("RGB", (160, 69), "white").save(poster)
+    mp4 = tmp_path / "m.mp4"
+    mp4.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+    prs, s, box = _deck_with_content(deck.Theme())
+    m = deck.add_movie(s, mp4, poster, box)
+    with pytest.raises(ValueError, match="no play effect"):
+        deck.animate(s, [], slide_w=prs.slide_width, slide_h=prs.slide_height, loop=[m])
+
+
 def test_equation_sits_above_figure_at_natural_size(tmp_path):
     prs, s, box = _deck_with_content(deck.Theme())
     pic, rest = deck.add_equation(s, r"R = \frac{k_{\mathrm{pas}}}{k_{\mathrm{pas}} + k_{\mathrm{deg}} V_n}",

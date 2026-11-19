@@ -100,8 +100,11 @@ figlib skill's setup block; commit; `git tag -a vX.Y.Z`; push the tag.
   sets `\frac` small). Glyphs are written as outlines because PowerPoint draws blanks for glyphs
   Carlito lacks. `render_equation_parts` crops pieces to a shared height so they line up.
 - `animate(slide, steps, ...)`: one entry per click, phases in turn, effects together —
-  `("in"|"out", shape, ms)` or `("move", shape, ms, dx, dy)`. Motion paths are relative to the
-  layout position; `animate` tracks chained moves.
+  `("in"|"out", shape, ms)`, `("move", shape, ms, dx, dy)` or `("play", movie, ms)`. Motion paths are
+  relative to the layout position; `animate` tracks chained moves. `auto=` phases run when the slide
+  opens; `loop=` movies repeat. Writing the timing replaces python-pptx's media node for each movie, so
+  `animate` writes its own `<p:video>` node for every played movie (`repeatCount="indefinite"` when
+  looped); a movie that is never played gets none. Added 2026-11-19 for the generals S02 opener.
 - LibreOffice/PDF shows every layer at its start position and video slides as their poster, so
   animations can only be checked in PowerPoint; QA motion from `anim.write(...).contact`.
   QA render: `sbatch scripts/20261030_render_pptx_argo.sbatch <deck.pptx> <out_dir>`.

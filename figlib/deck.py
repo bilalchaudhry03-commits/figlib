@@ -483,8 +483,10 @@ def build_on_click(slide, shapes, *, dur_ms: int = 100) -> None:
     _set_timing(slide, clicks)
 
 
-def _set_timing(slide, clicks: list[str]) -> None:
-    """Write one main click sequence (`clicks`, one <p:par> per click) as the slide's p:timing."""
+def _set_timing(slide, clicks: list[str], media: str = "") -> None:
+    """Write one main click sequence (`clicks`, one <p:par> per click) as the slide's p:timing.
+
+    `media` is extra tmRoot children (the <p:video> nodes of played movies)."""
     timing = parse_xml(
         f'<p:timing xmlns:p="{NS_P}"><p:tnLst><p:par><p:cTn id="1" dur="indefinite" '
         f'restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" '
@@ -493,7 +495,7 @@ def _set_timing(slide, clicks: list[str]) -> None:
         '</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl>'
         '<p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond '
         'evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
-        '</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>'
+        '</p:seq>' + media + '</p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>'
     )
     sld = slide._element
     old = sld.find(qn("p:timing"))
@@ -507,13 +509,18 @@ def _set_timing(slide, clicks: list[str]) -> None:
         sld.append(timing)
 
 
-def animate(slide, steps, *, slide_w: int, slide_h: int) -> None:
-    """Click-driven animation with fades in and out and motion paths.
+def animate(slide, steps, *, slide_w: int, slide_h: int, auto=None, loop=()) -> None:
+    """Click-driven animation with fades in and out, motion paths and movie playback.
 
     `steps` is one entry per click; each click is a list of PHASES that play one after
     another without a further click; each phase is a list of effects that play together:
 
         ("in", shape, ms) | ("out", shape, ms) | ("move", shape, ms, dx_emu, dy_emu)
+        | ("play", movie, ms)        # a movie from add_movie, played from the start; ms = its length
+
+    `auto` is a list of phases, as in one click, that run when the slide opens (e.g. start a
+    background movie). Movies in `loop` repeat until the slide ends. Writing the timing replaces the
+    media node python-pptx gave each movie, so every movie that should play needs a "play" effect.
 
     A shape with an "in" effect starts hidden (PowerPoint hides an entrance-effect target until it
     plays). Motion paths are written relative to the shape's LAYOUT position (origin="layout"), so a
@@ -559,21 +566,43 @@ def animate(slide, steps, *, slide_w: int, slide_h: int) -> None:
                     f'fill="hold"/>{tgt(sp)}<p:attrNameLst><p:attrName>ppt_x</p:attrName>'
                     f'<p:attrName>ppt_y</p:attrName></p:attrNameLst></p:cBhvr></p:animMotion>')
             return head.format(pid=0, cls="path", extra=' accel="50000" decel="50000"') + body + tail
+        if kind == "play":
+            played[sp] = shp
+            body = (f'<p:cmd type="call" cmd="playFrom(0.0)"><p:cBhvr><p:cTn id="{next(ids)}" dur="{ms}" '
+                    f'fill="hold"/>{tgt(sp)}</p:cBhvr></p:cmd>')
+            return head.format(pid=1, cls="mediacall", extra="") + body + tail
         raise ValueError(f"unknown effect {kind!r}")
 
-    for click in steps:
+    played: dict[int, object] = {}
+
+    def sequence(click, first_node, start):
         outer, phases, delay = next(ids), [], 0
         for k, phase in enumerate(click):
-            nodes = [("clickEffect" if k == 0 else "afterEffect") if j == 0 else "withEffect"
+            nodes = [(first_node if k == 0 else "afterEffect") if j == 0 else "withEffect"
                      for j in range(len(phase))]
             body = "".join(effect(e[0], e[1], e[2], n, *e[3:]) for e, n in zip(phase, nodes))
             phases.append(f'<p:par><p:cTn id="{next(ids)}" fill="hold"><p:stCondLst><p:cond '
                           f'delay="{delay}"/></p:stCondLst><p:childTnLst>{body}</p:childTnLst>'
                           f'</p:cTn></p:par>')
             delay += max(e[2] for e in phase)
-        clicks.append(f'<p:par><p:cTn id="{outer}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/>'
-                      f'</p:stCondLst><p:childTnLst>{"".join(phases)}</p:childTnLst></p:cTn></p:par>')
-    _set_timing(slide, clicks)
+        return (f'<p:par><p:cTn id="{outer}" fill="hold"><p:stCondLst>{start}</p:stCondLst>'
+                f'<p:childTnLst>{"".join(phases)}</p:childTnLst></p:cTn></p:par>')
+
+    if auto:   # starts with the slide: "After Previous" on the slide's own begin (mainSeq is id 2)
+        clicks.append(sequence(auto, "afterEffect",
+                               '<p:cond delay="indefinite"/><p:cond evt="onBegin" delay="0"><p:tn val="2"/></p:cond>'))
+    for click in steps:
+        clicks.append(sequence(click, "clickEffect", '<p:cond delay="indefinite"/>'))
+    loops = {s.shape_id for s in loop}
+    media = "".join(
+        f'<p:video><p:cMediaNode vol="80000"><p:cTn id="{next(ids)}" '
+        f'{"repeatCount=" + chr(34) + "indefinite" + chr(34) + " " if sp in loops else ""}fill="hold" '
+        f'display="0"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:endCondLst><p:cond '
+        f'evt="onStopAudio" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:endCondLst></p:cTn>'
+        f'{tgt(sp)}</p:cMediaNode></p:video>' for sp in played)
+    if loops - set(played):
+        raise ValueError("a movie in `loop` has no play effect")
+    _set_timing(slide, clicks, media)
 
 
 # --------------------------------------------------------------------------- notes / naming
