@@ -114,6 +114,10 @@ figlib skill's setup block; commit; `git tag -a vX.Y.Z`; push the tag.
   animations can only be checked in PowerPoint; QA motion from `anim.write(...).contact`.
   QA render: `sbatch scripts/20261030_render_pptx_argo.sbatch <deck.pptx> <out_dir>`.
 - Movies are MP4 in the deck, GIF for Slack.
+- PNG fallbacks: cairosvg where native cairo exists (Linux; generals output unchanged), else headless
+  Chromium (`_chromium_png`, Carlito loaded, a browser per call so later sync_playwright() calls in the
+  process still work). cairosvg is imported lazily: at module top it made `figlib.deck` unimportable on
+  Windows (os-check, 2026-11-23, 0.2.8).
 
 **Animation / video**
 - Frames stream into ffmpeg's stdin; only file-only renderers (PyMOL) get a frame directory, in scratch.

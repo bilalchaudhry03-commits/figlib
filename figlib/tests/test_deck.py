@@ -284,3 +284,22 @@ def test_equation_parts_share_a_baseline(tmp_path):
     r = deck.render_equation_parts(parts, tmp_path / "cache")
     assert len({round(h, 6) for *_, h in r}) == 1
     assert r"\cdot" not in "" and "<text" not in r[1][0].read_text()
+
+
+def test_fallback_png_without_native_cairo_uses_chromium(tmp_path, monkeypatch):
+    # Windows has no libcairo, so cairosvg can't even be imported there (os-check, 2026-11-23).
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+    try:
+        with sync_playwright() as p:
+            p.chromium.launch().close()
+    except Exception:
+        pytest.skip("Chromium not installed")
+    monkeypatch.setattr(deck, "_cairosvg", lambda: None)
+    svg = tmp_path / "f.svg"
+    svg.write_text(SVG)
+    png = deck.fallback_png(svg, tmp_path / "cache")
+    im = Image.open(png).convert("RGB")
+    assert im.size == (deck.FALLBACK_PX_WIDTH, deck.FALLBACK_PX_WIDTH // 2)
+    assert im.getpixel((im.width // 2, im.height // 2)) == (0x2a, 0x78, 0xd6)
+    assert not list((tmp_path / "cache").glob("*.html"))

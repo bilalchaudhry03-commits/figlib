@@ -11,7 +11,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import cairosvg
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
@@ -222,9 +221,58 @@ def fallback_png(svg: Path, cache_dir: Path) -> Path:
     cache_dir.mkdir(parents=True, exist_ok=True)
     png = cache_dir / (svg.stem + ".png")
     if not png.exists() or png.stat().st_mtime < svg.stat().st_mtime:
-        cairosvg.svg2png(bytestring=calibri_first(svg.read_bytes()), url=str(svg),
-                         write_to=str(png), output_width=FALLBACK_PX_WIDTH)
+        cairosvg = _cairosvg()
+        if cairosvg is not None:
+            cairosvg.svg2png(bytestring=calibri_first(svg.read_bytes()), url=str(svg),
+                             write_to=str(png), output_width=FALLBACK_PX_WIDTH)
+        else:
+            _chromium_png(svg, png)
     return png
+
+
+def _cairosvg():
+    """cairosvg, or None where the native cairo library is missing (Windows; a Mac without
+    Homebrew's cairo). cairosvg loads libcairo on import, so importing it at module top made
+    `figlib.deck` -- and every outline build -- fail on those machines (os-check, 2026-11-23)."""
+    try:
+        import cairosvg
+    except (ImportError, OSError):
+        return None
+    return cairosvg
+
+
+def _chromium_png(svg: Path, png: Path) -> None:
+    """Rasterise with headless Chromium (the `html` extra) at FALLBACK_PX_WIDTH, Carlito loaded
+    as Calibri. A browser per call: a long-lived one would hold Playwright's sync loop and break
+    any later sync_playwright() in the same process (figlib.layers, check_layout)."""
+    from playwright.sync_api import sync_playwright
+    from figlib import fonts
+    markup = re.sub(r"<\?xml[^>]*\?>", "", calibri_first(svg.read_bytes()).decode("utf-8"))
+    page_html = png.resolve().with_suffix(".render.html")   # resolved: a relative path has no file URI
+    page_html.write_text("<!doctype html><html><head><meta charset='utf-8'>"
+                         f"<base href='{svg.resolve().parent.as_uri()}/'></head>"
+                         f"<body style='margin:0;background:transparent'>{markup}</body></html>",
+                         encoding="utf-8")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": FALLBACK_PX_WIDTH, "height": FALLBACK_PX_WIDTH})
+            fonts.use_in_browser(page)
+            page.goto(page_html.as_uri())
+            page.evaluate("document.fonts.ready")
+            h = page.evaluate("""w => { const s = document.querySelector('svg');
+                const b = s.getBoundingClientRect();
+                // without a viewBox, a resized SVG keeps its content at the old size; give it one
+                if (!(s.viewBox && s.viewBox.baseVal && s.viewBox.baseVal.width))
+                    s.setAttribute('viewBox', `0 0 ${b.width} ${b.height}`);
+                const vb = s.viewBox.baseVal, r = vb.height / vb.width;
+                s.style.width = w + 'px'; s.style.height = Math.round(w * r) + 'px'; s.style.display = 'block';
+                return Math.round(w * r); }""", FALLBACK_PX_WIDTH)
+            page.set_viewport_size({"width": FALLBACK_PX_WIDTH, "height": max(h, 1)})
+            page.query_selector("svg").screenshot(path=str(png), omit_background=True)
+            browser.close()
+    finally:
+        page_html.unlink(missing_ok=True)
 
 
 _CSS_FAMILY = re.compile(r"(font-family:\s*)([^;\"]+)")

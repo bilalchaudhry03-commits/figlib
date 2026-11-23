@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-2022]
+        os: [macos-latest, windows-2022]   # macos-14 images were retired ("not supported", 2026-11-23)
     defaults:
       run:
         shell: bash
