@@ -15,17 +15,17 @@ dropped. Use its checks instead of eyeballing a PNG.
 python -c "import figlib, sys; print(figlib.__version__, sys.executable)"   # which figlib, in which Python
 ```
 
-This skill matches figlib **0.2.9**. If figlib is missing, install it into the project's environment (its
+This skill matches figlib **0.3.0**. If figlib is missing, install it into the project's environment (its
 venv or conda env). If the project has none, ask the user which to use; never install into the system
 Python or with `--user`.
 
 ```bash
-pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.2.9"
+pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.3.0"
 python -m playwright install chromium     # once per machine, for check_layout / export_svg
 ```
 
-If the installed version is older than 0.2.9, tell the user and offer to upgrade with the same line; some
-calls in this skill may not exist in older versions. Extras, if they want less: `html`, `deck`, `video`.
+If the installed version is older than 0.3.0, tell the user and offer to upgrade with the same line; some
+calls in this skill may not exist in older versions. Extras, if they want less: `html`, `deck`, `video`, `structure`.
 Carlito is a free font with Calibri's exact letter widths, so a layout checked here holds in PowerPoint.
 PNGs rendered here use Carlito; for HTML figures the exported SVG is the authority.
 
@@ -95,6 +95,8 @@ colours — use them only to match those figures.
 - Starting a new figure: copy `examples/schematic_template.html` (HTML+SVG schematic) or
   `examples/figcheck_example.py` (matplotlib) from the figlib repo; both pass the checks as they are.
 
+- Protein outlines from structures (AlphaFold DB by UniProt ID, or a .cif/.pdb):
+  `python -m figlib.silhouette` — see the `scientific-figure-design` skill.
 - Designing a schematic or diagram (layout, colour roles, type sizing, export traps): use the
   `scientific-figure-design` skill.
 - Making an explainer video (workflow, model checks, content rules): use the `explainer-video` skill.

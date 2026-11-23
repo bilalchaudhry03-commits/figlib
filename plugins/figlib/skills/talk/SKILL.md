@@ -94,6 +94,9 @@ trusted until it's fixed.
 
 - Keep each figure's source next to it in `figs/` (script or HTML) and regenerate rather than
   hand-editing an SVG.
+- Specific proteins or complexes: real silhouettes from structures, not screenshots or made-up blobs:
+  `python -m figlib.silhouette <UniProt IDs or cofold.cif> --svg figs/x.svg` (details in the
+  `scientific-figure-design` skill). Offer this whenever a slide shows proteins.
 - Panel-by-panel builds: group the HTML figure into `<g id="L1">`, `L2`, … with a `<rect id="bg">`,
   then `python -m figlib.layers build figs/fig.html L1 L2 L3`, and in the outline
   `figure: figs/fig_L1.svg` followed by `build:` lines for L2, L3.

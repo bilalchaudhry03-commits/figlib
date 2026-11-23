@@ -21,11 +21,11 @@ There are four parts:
 Needs Python 3.10+ and git. No GitHub account needed: the repo is public.
 
 ```bash
-pip install "figlib @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.2.9"          # matplotlib linter + palette only
-pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.2.9"     # everything
+pip install "figlib @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.3.0"          # matplotlib linter + palette only
+pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.3.0"     # everything
 ```
 
-The `@v0.2.9` pins a release, so your scripts don't change under you when `main` does. To upgrade, re-run
+The `@v0.3.0` pins a release, so your scripts don't change under you when `main` does. To upgrade, re-run
 the line with the newer tag (listed under the repo's Tags). Drop the `@v…` to track `main` instead.
 
 **Where it runs.** Linux (Argo), macOS and Windows: the test suite and a starter talk built and rendered
@@ -36,6 +36,7 @@ The extras:
 - `html` installs `check_layout`, `export_svg` and `layers`. Run `playwright install chromium` once afterwards.
 - `deck` installs the `.pptx` helpers, the outline builder and the renderer.
 - `video` installs the animation tools.
+- `structure` installs `silhouette` (gemmi, scipy).
 
 **LibreOffice**, for rendering decks to images (`figlib.render`): install it once from
 [libreoffice.org](https://www.libreoffice.org/download/), or `brew install --cask libreoffice` (Mac),
@@ -184,6 +185,19 @@ python -m figlib.layers anim fig.html             # moving layers + fig_anim.jso
 For `build`, group the figure into `<g id="L1">`, `<g id="L2">`, … and give its background
 `<rect id="bg">`. For `anim`, the figure defines `window.ANIM` and `window.ANIM_STATE`; see the
 module docstring.
+
+### `silhouette`: protein outlines from structures
+
+```bash
+python -m figlib.silhouette P52292 Q14974 O14980 --svg baits.svg       # AlphaFold DB by UniProt ID, side by side
+python -m figlib.silhouette cofold.cif --chains A=XPO1,B=RanGTP,C=cargo --svg complex.svg
+python -m figlib.silhouette cofold.cif --views views.png               # 24 views to choose --view from
+```
+
+Real outlines instead of screenshots or made-up blobs: computed from CA coordinates (residues with
+pLDDT < 65 left out of predicted models), at one shared Ångström scale so relative sizes are true.
+`--svg` gives a finished, labelled figure; `--json` gives the outlines for an HTML schematic. AlphaFold DB
+models (CC BY 4.0) are downloaded once and cached; set `FIGLIB_CACHE` to choose where.
 
 ### Smaller pieces
 

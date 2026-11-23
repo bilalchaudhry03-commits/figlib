@@ -84,6 +84,28 @@ One sans-serif family (declare `figlib.fonts.STACK`). Hierarchy by size and weig
 case, short labels, labelled directly on the element instead of a legend when there are ≤ 5–6
 categories.
 
+## Proteins: real silhouettes, not blobs
+
+When a schematic shows specific proteins or a complex (importin-β carrying cargo, a receptor and its
+ligand), draw their real outlines with `figlib.silhouette` rather than inventing shapes:
+
+```bash
+python -m figlib.silhouette P52292 Q14974 --svg figs/receptors.svg            # AlphaFold DB by UniProt ID
+python -m figlib.silhouette cofold.cif --chains A=XPO1,B=RanGTP,C=cargo --views figs/views.png
+python -m figlib.silhouette cofold.cif --chains A=XPO1,B=RanGTP,C=cargo --view 3:270 --json figs/xpo1.json
+```
+
+- Outlines are computed from coordinates (CA atoms, pLDDT ≥ 65 in predicted models), at one shared
+  Ångström scale, so proteins drawn together are at their true relative size. Never rescale one
+  silhouette on its own; say so if you must.
+- Pick the view from the `--views` sheet (24 views at one scale) and show it to the user; the default
+  (`2:90`) is the largest outline with the long axis horizontal.
+- `--svg` is a finished figure (palette colours, labels) for a slide or an outline's `figure:`. For a
+  schematic with arrows and context, use `--json` and draw the rings in the HTML figure (Ångström
+  coordinates, y down; place each chain's label at its `anchor` or on a leader line to it).
+- Keep each protein's colour the same across the whole talk (identity colour, below).
+- Cite AlphaFold DB (CC BY 4.0) in the notes when its models are used.
+
 ## Structure
 
 - Align everything to a grid: shared margins, equal gutters, common baselines.
