@@ -1,6 +1,6 @@
 ---
 name: talk
-description: Build and iterate on a slide deck (talk, lab meeting, journal club, committee meeting, defense, conference talk) as a Markdown outline that figlib turns into a .pptx, rendering the slides to look at after every change. Use whenever someone asks for slides, a deck, a presentation or a talk, or to revise one made this way; also when they hand over an existing .pptx and want help reworking it. Not for a single figure (see the figlib and scientific-figure-design skills).
+description: Build and iterate on a slide deck (talk, lab meeting, journal club, committee meeting, defense, conference talk) as a Markdown outline that figlib turns into a .pptx, rendering the slides to look at after every change. Use whenever someone asks for slides, a deck, a presentation or a talk, or to revise one made this way. Not for a single figure (see the figlib and scientific-figure-design skills).
 ---
 
 # Talks as outlines

@@ -49,8 +49,10 @@ def test_declared_fonts_and_substitution():
     assert render._substituted(["ArialMT", "Arial-BoldMT"], {"Arial"}) == []
 
 
-def test_declared_fonts_reads_the_deck(tmp_path):
-    assert "Calibri" in render.declared_fonts(_deck(tmp_path))
+def test_declared_fonts_are_the_slides_not_the_themes_script_lists(tmp_path):
+    # The default theme lists Arial, Times New Roman, ... for other scripts; counting them would
+    # let a Calibri -> Arial fallback pass. Found 2026-11-23, after 0.2.6.
+    assert render.declared_fonts(_deck(tmp_path)) == {"Calibri"}
 
 
 def test_pdf_fonts_strips_subset_prefix(tmp_path):

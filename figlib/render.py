@@ -86,12 +86,17 @@ def slide_flags(pptx: Path) -> tuple[list, list]:
 
 
 def declared_fonts(pptx: Path) -> set:
-    """Typefaces the deck asks for (slides, layouts, masters, theme), theme placeholders excluded."""
+    """Latin typefaces the slides ask for: explicit faces in slide XML plus the theme's major/minor
+    Latin fonts. Not the theme's per-script lists (Arial, Times New Roman, ... for other scripts):
+    counting those would let a Calibri -> Arial fallback pass as declared."""
     names = set()
     with zipfile.ZipFile(pptx) as z:
         for n in z.namelist():
-            if n.startswith("ppt/") and n.endswith(".xml"):
-                names |= set(re.findall(r'typeface="([^"+][^"]*)"', z.read(n).decode("utf-8", "replace")))
+            xml = z.read(n).decode("utf-8", "replace") if n.endswith(".xml") else ""
+            if re.fullmatch(r"ppt/slides/slide\d+\.xml", n):
+                names |= set(re.findall(r'<a:(?:latin|ea|cs|sym)\b[^>]*typeface="([^"+][^"]*)"', xml))
+            elif re.fullmatch(r"ppt/theme/theme\d+\.xml", n):
+                names |= set(re.findall(r'<a:latin\b[^>]*typeface="([^"+][^"]*)"', xml))
     return names
 
 
@@ -148,10 +153,9 @@ def render(pptx: Path, out_dir: Path | None = None, *, dpi: int = 110,
         font_dir = work / "profile" / "user" / "fonts"
         font_dir.mkdir(parents=True)
         for ttf in fonts.ttf_files():
-            try:
-                (font_dir / ttf.name).symlink_to(ttf)
-            except OSError:                       # Windows without symlink rights
-                shutil.copy(ttf, font_dir / ttf.name)
+            # Copies, not links: a link out of the work dir dangles inside an Apptainer image
+            # (only the work dir is bound) and needs extra rights on Windows. ~1 MB, deleted on exit.
+            shutil.copy(ttf, font_dir / ttf.name)
         if cmd[0] == "apptainer":
             cmd = [cmd[0], cmd[1], "--bind", str(work), *cmd[2:]]
         r = subprocess.run([*cmd, f"-env:UserInstallation={(work / 'profile').as_uri()}",
