@@ -34,6 +34,7 @@ for labmates); this file is for working on the code.
 | `inputs` | `require(path, why=…)` — declare a script's data inputs |
 | `deck` | .pptx assembly: `Theme`, SVG-with-PNG-fallback figures, equations, movies, `animate`, `lint_deck` |
 | `outline` | Markdown outline → .pptx via `deck` (format in its docstring); ported 2026-11-23 from the generals builder, which it reproduces byte for byte apart from equation-SVG `<dc:date>` stamps |
+| `render` | .pptx → PDF → slide PNGs + contact sheet, LibreOffice headless (PATH, Mac/Windows install dirs, `FIGLIB_SOFFICE`, or `FIGLIB_LIBREOFFICE_SIF` on Argo, compute node only) + pypdfium2; fresh profile with Carlito linked in; exits 1 if the PDF uses a font the deck never declared. Generals deck (25 slides, 34 MB): 2 m 11 s on 2 CPUs |
 | `anim` | frames → MP4 + GIF + poster + contact sheet; `.clipped` lists frames touching the edge |
 | `scene`, `clip` | explainer videos; Manim clips rendered in Apptainer |
 

@@ -1,0 +1,89 @@
+"""figlib.render: finding LibreOffice, slide flags, the font check, and (where installed) a real render."""
+
+import os
+
+import pytest
+
+from figlib import outline, render
+
+SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">'
+       '<rect width="200" height="100" fill="#2a78d6"/></svg>')
+OUTLINE = """### S01 · A static slide
+- one bullet
+
+### S02 · A slide that builds
+figure: f.svg
+build: f.svg
+"""
+
+
+def _deck(tmp_path):
+    (tmp_path / "f.svg").write_text(SVG)
+    (tmp_path / "talk.md").write_text(OUTLINE)
+    return outline.build(tmp_path / "talk.md").out
+
+
+def test_find_soffice_prefers_env_and_explains_when_missing(monkeypatch):
+    monkeypatch.setenv("FIGLIB_SOFFICE", "/x/soffice")
+    assert render.find_soffice() == ["/x/soffice"]
+    assert render.find_soffice("/y/soffice") == ["/y/soffice"]
+    monkeypatch.delenv("FIGLIB_SOFFICE")
+    monkeypatch.setenv("FIGLIB_LIBREOFFICE_SIF", "/x/lo.sif")
+    assert render.find_soffice() == ["apptainer", "exec", "/x/lo.sif", "soffice"]
+    monkeypatch.delenv("FIGLIB_LIBREOFFICE_SIF")
+    monkeypatch.setattr(render.shutil, "which", lambda name: None)
+    monkeypatch.setattr(render, "MAC_SOFFICE", "/nonexistent")
+    monkeypatch.setattr(render, "WIN_SOFFICE", [])
+    with pytest.raises(FileNotFoundError, match="LibreOffice"):
+        render.find_soffice()
+
+
+def test_slide_flags_mark_builds_not_static(tmp_path):
+    stacked, movies = render.slide_flags(_deck(tmp_path))
+    assert stacked == [2] and movies == []
+
+
+def test_declared_fonts_and_substitution():
+    used = ["Carlito", "Carlito-Bold", "DejaVuSans"]
+    assert render._substituted(used, {"Calibri"}) == ["DejaVuSans"]
+    assert render._substituted(["ArialMT", "Arial-BoldMT"], {"Arial"}) == []
+
+
+def test_declared_fonts_reads_the_deck(tmp_path):
+    assert "Calibri" in render.declared_fonts(_deck(tmp_path))
+
+
+def test_pdf_fonts_strips_subset_prefix(tmp_path):
+    pdf = tmp_path / "x.pdf"
+    pdf.write_bytes(b"<< /Type /Font /BaseFont /ABCDEF+Carlito-Bold >> << /BaseFont/Carlito >>")
+    assert render.pdf_fonts(pdf) == ["Carlito", "Carlito-Bold"]
+
+
+def test_contact_sheet(tmp_path):
+    from PIL import Image
+    pngs = []
+    for i in range(5):
+        p = tmp_path / f"s{i}.png"
+        Image.new("RGB", (1600, 900), "white").save(p)
+        pngs.append(p)
+    out = render._contact(pngs, [str(i) for i in range(5)], tmp_path / "contact.png")
+    w, h = Image.open(out).size
+    assert w > 4 * render.THUMB_W and h > 2 * 270          # 4 columns, 2 rows
+
+
+def _have_soffice():
+    try:
+        render.find_soffice()
+    except FileNotFoundError:
+        return False
+    return not os.environ.get("FIGLIB_LIBREOFFICE_SIF")     # an image needs a compute node; skip
+
+
+@pytest.mark.skipif(not _have_soffice(), reason="LibreOffice not installed")
+def test_real_render(tmp_path):
+    pytest.importorskip("pypdfium2")
+    r = render.render(_deck(tmp_path))
+    assert len(r.pngs) == 2 and r.contact.exists() and r.pdf.exists()
+    assert r.stacked == [2]
+    assert r.fonts and not r.substituted, r.fonts
+    assert not list(r.contact.parent.glob(".work_*"))       # temp profile cleaned up

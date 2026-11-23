@@ -23,6 +23,8 @@ jobs:
         run: pip install -e ".[test]" pyflakes
       - name: Install Chromium for the HTML tools
         run: python -m playwright install --with-deps chromium
+      - name: Install LibreOffice for figlib.render
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-impress
       - name: Lint
         run: python -m pyflakes figlib
       - name: Test
