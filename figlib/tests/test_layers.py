@@ -33,7 +33,7 @@ window.ANIM_STATE = k => {
 
 def test_variants_drop_the_other_layers(tmp_path):
     html = tmp_path / "f.html"
-    html.write_text(BUILD_HTML)
+    html.write_text(BUILD_HTML, encoding="utf-8")
     v1, v2 = layers.build(html, ["L1", "L2"], export=False)
     assert '["L2"]' in v1.read_text() and '["L1", "bg"]' in v2.read_text()
 
@@ -54,7 +54,7 @@ needs_browser = pytest.mark.skipif(not _launches(), reason="Chromium not install
 @needs_browser
 def test_build_exports_transparent_later_layers(tmp_path):
     html = tmp_path / "f.html"
-    html.write_text(BUILD_HTML)
+    html.write_text(BUILD_HTML, encoding="utf-8")
     s1, s2 = layers.build(html, ["L1", "L2"])
     a, b = s1.read_text(), s2.read_text()
     assert ">one<" in a and ">two<" not in a and 'id="bg"' in a
@@ -66,13 +66,13 @@ def test_build_exports_transparent_later_layers(tmp_path):
 def test_anim_manifest_builds_an_animated_slide(tmp_path):
     html = tmp_path / "figs" / "a.html"
     html.parent.mkdir()
-    html.write_text(ANIM_HTML)
+    html.write_text(ANIM_HTML, encoding="utf-8")
     man = layers.anim(html)
     spec = json.loads(man.read_text())
     assert [la["png"] for la in spec["layers"]] == ["a_base.png", "a_dot.png"]
     assert len(list((tmp_path / "figs" / "a_preview").glob("*.png"))) == 3
     md = tmp_path / "talk.md"
-    md.write_text("### S01 · Moves\nanimation: figs/a_anim.json\n")
+    md.write_text("### S01 · Moves\nanimation: figs/a_anim.json\n", encoding="utf-8")
     r = outline.build(md)
     assert r.missing == []
     assert render.slide_flags(r.out)[0] == [1]

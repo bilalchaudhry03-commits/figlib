@@ -41,9 +41,9 @@ notes:
 def _write(tmp_path, text=OUTLINE):
     (tmp_path / "assets").mkdir()
     for name in ("fig.svg", "fig_L2.svg"):
-        (tmp_path / "assets" / name).write_text(SVG)
+        (tmp_path / "assets" / name).write_text(SVG, encoding="utf-8")
     md = tmp_path / "talk.md"
-    md.write_text(text)
+    md.write_text(text, encoding="utf-8")
     return md
 
 
@@ -93,7 +93,7 @@ def test_cli_exits_1_on_missing_and_honours_out(tmp_path):
     md = _write(tmp_path)
     assert outline.main([str(md), "-o", str(tmp_path / "x.pptx")]) == 1
     assert (tmp_path / "x.pptx").exists()
-    md.write_text(OUTLINE.split("### B01")[0])
+    md.write_text(OUTLINE.split("### B01")[0], encoding="utf-8")
     assert outline.main([str(md)]) == 0
 
 
@@ -109,5 +109,5 @@ def test_no_logo_means_no_slot_and_a_missing_logo_is_reported(tmp_path):
     md = _write(tmp_path, OUTLINE.split("### B01")[0])
     prs = Presentation(outline.build(md).out)
     assert not [sh for s in prs.slides for sh in s.shapes if sh.name.startswith("logo")]
-    md.write_text(OUTLINE.replace("root: assets", "root: assets\nlogo: shield.png").split("### B01")[0])
+    md.write_text(OUTLINE.replace("root: assets", "root: assets\nlogo: shield.png").split("### B01")[0], encoding="utf-8")
     assert outline.build(md).missing == [("logo", "shield.png")]

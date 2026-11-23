@@ -101,10 +101,26 @@ def declared_fonts(pptx: Path) -> set:
 
 
 def pdf_fonts(pdf: Path) -> list:
-    """Base font names in the PDF, subset prefixes (ABCDEF+) stripped."""
-    raw = pdf.read_bytes()
-    found = {re.sub(r"^[A-Z]{6}\+", "", m.decode("latin-1"))
-             for m in re.findall(rb"/BaseFont\s*/([^\s/\[\]<>()]+)", raw)}
+    """Fonts that draw visible (non-whitespace) characters in the PDF, subset prefixes stripped.
+    Per character, not the PDF's font list: newer LibreOffice embeds its default serif for empty
+    text bodies, which draws nothing (os-check, 2026-11-23: Times New Roman on Windows, Liberation
+    Serif on macOS, zero glyphs each)."""
+    import ctypes
+    import pypdfium2 as pdfium
+    import pypdfium2.raw as pdfium_c
+    found = set()
+    buf, flags = ctypes.create_string_buffer(256), ctypes.c_int()
+    doc = pdfium.PdfDocument(pdf)
+    try:
+        for page in doc:
+            tp = page.get_textpage()
+            for i in range(tp.count_chars()):
+                if tp.get_text_range(i, 1).isspace():
+                    continue
+                if pdfium_c.FPDFText_GetFontInfo(tp.raw, i, buf, len(buf), ctypes.byref(flags)):
+                    found.add(re.sub(r"^[A-Z]{6}\+", "", buf.value.decode("utf-8", "replace")))
+    finally:
+        doc.close()
     return sorted(found)
 
 

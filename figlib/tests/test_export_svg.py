@@ -169,7 +169,10 @@ def test_provenance_stamp_names_this_version(exported):
 
 def test_outline_circle_renders_hollow(exported, tmp_path):
     """Render the SVG without its page: the outline-only circle must be hollow, not black."""
-    cairosvg = pytest.importorskip("cairosvg")
+    try:
+        import cairosvg                    # OSError, not ImportError, when native cairo is missing
+    except (ImportError, OSError):
+        pytest.skip("cairosvg / native cairo not available")
     import io
     from PIL import Image
     out, _, _ = exported

@@ -143,7 +143,7 @@ def build(outline: Path, out: Path | None = None, *, theme: deck.Theme | None = 
     """Build `outline` into a .pptx and save it. Arguments override the front matter.
     Missing figures/movies are skipped and listed in `Report.missing`; check it."""
     outline = Path(outline).resolve()
-    meta, body = front_matter(outline.read_text(encoding="utf-8"))
+    meta, body = front_matter(outline.read_text(encoding="utf-8-sig"))   # -sig: Windows editors may add a BOM
     here = outline.parent
     root = Path(root) if root is not None else (here / meta["root"]).resolve() if "root" in meta else here
     out = Path(out) if out is not None else here / meta["out"] if "out" in meta else outline.with_suffix(".pptx")

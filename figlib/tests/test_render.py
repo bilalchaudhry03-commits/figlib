@@ -18,8 +18,8 @@ build: f.svg
 
 
 def _deck(tmp_path):
-    (tmp_path / "f.svg").write_text(SVG)
-    (tmp_path / "talk.md").write_text(OUTLINE)
+    (tmp_path / "f.svg").write_text(SVG, encoding="utf-8")
+    (tmp_path / "talk.md").write_text(OUTLINE, encoding="utf-8")
     return outline.build(tmp_path / "talk.md").out
 
 
@@ -55,10 +55,20 @@ def test_declared_fonts_are_the_slides_not_the_themes_script_lists(tmp_path):
     assert render.declared_fonts(_deck(tmp_path)) == {"Calibri"}
 
 
-def test_pdf_fonts_strips_subset_prefix(tmp_path):
-    pdf = tmp_path / "x.pdf"
-    pdf.write_bytes(b"<< /Type /Font /BaseFont /ABCDEF+Carlito-Bold >> << /BaseFont/Carlito >>")
-    assert render.pdf_fonts(pdf) == ["Carlito", "Carlito-Bold"]
+def test_pdf_fonts_are_the_fonts_that_draw_characters(tmp_path):
+    pytest.importorskip("pypdfium2")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from figlib import fonts
+    fonts.register()
+    fig = plt.figure(figsize=(3, 1))
+    fig.text(0.1, 0.5, "Carlito text", family="Carlito")
+    with matplotlib.rc_context({"pdf.fonttype": 42}):
+        fig.savefig(tmp_path / "x.pdf")
+    plt.close(fig)
+    used = render.pdf_fonts(tmp_path / "x.pdf")
+    assert used and all(f.startswith("Carlito") for f in used), used
 
 
 def test_contact_sheet(tmp_path):

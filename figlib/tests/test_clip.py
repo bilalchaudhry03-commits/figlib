@@ -1,5 +1,7 @@
 """figlib.clip: pre-rendered clips as scenes (reading frames, the overlay, purity, missing clips)."""
 
+import sys
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -70,6 +72,7 @@ def test_missing_clip_placeholder_in_storyboard_and_refused_in_draft(tmp_path):
     plt.close(fig)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Apptainer (and its POSIX image paths) is Linux-only")
 def test_manim_command_binds_repo_and_sets_quality(tmp_path, monkeypatch):
     monkeypatch.setenv("FIGLIB_MANIM_SIF", "/images/manim.sif")
     cmd = clip.manim_command(tmp_path / "m.py", "Morph", tmp_path / "out", "draft")
@@ -78,6 +81,7 @@ def test_manim_command_binds_repo_and_sets_quality(tmp_path, monkeypatch):
     assert any(str(clip.ROOT) in a for a in cmd)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Apptainer (and its POSIX image paths) is Linux-only")
 def test_manim_image_explicit_sif_beats_env(tmp_path, monkeypatch):
     monkeypatch.setenv("FIGLIB_MANIM_SIF", "/images/env.sif")
     cmd = clip.manim_command(tmp_path / "m.py", "Morph", tmp_path / "out", sif="/images/arg.sif")

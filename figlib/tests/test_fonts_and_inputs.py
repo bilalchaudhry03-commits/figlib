@@ -164,8 +164,12 @@ def _check_layout(tmp_path, family):
     # these tests passed on Argo (browser path set explicitly) and failed in CI.
     if "PLAYWRIGHT_BROWSERS_PATH" not in env:
         real = Path.home()
-        cache = (real / "Library" / "Caches") if sys.platform == "darwin" else \
-            Path(env.get("XDG_CACHE_HOME") or real / ".cache")
+        if sys.platform == "win32":
+            cache = Path(env.get("LOCALAPPDATA") or real / "AppData" / "Local")
+        elif sys.platform == "darwin":
+            cache = real / "Library" / "Caches"
+        else:
+            cache = Path(env.get("XDG_CACHE_HOME") or real / ".cache")
         env["PLAYWRIGHT_BROWSERS_PATH"] = str(cache / "ms-playwright")
     return subprocess.run([sys.executable, "-m", "figlib.check_layout", str(html)],
                           capture_output=True, text=True, cwd=REPO, env=env)
