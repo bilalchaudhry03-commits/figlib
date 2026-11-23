@@ -38,21 +38,7 @@ def test_variants_drop_the_other_layers(tmp_path):
     assert '["L2"]' in v1.read_text() and '["L1", "bg"]' in v2.read_text()
 
 
-def _launches():
-    from playwright.sync_api import sync_playwright
-    try:
-        with sync_playwright() as p:
-            p.chromium.launch().close()
-        return True
-    except Exception:
-        return False
-
-
-needs_browser = pytest.mark.skipif(not _launches(), reason="Chromium not installed")
-
-
-@needs_browser
-def test_build_exports_transparent_later_layers(tmp_path):
+def test_build_exports_transparent_later_layers(tmp_path, chromium):
     html = tmp_path / "f.html"
     html.write_text(BUILD_HTML, encoding="utf-8")
     s1, s2 = layers.build(html, ["L1", "L2"])
@@ -62,8 +48,7 @@ def test_build_exports_transparent_later_layers(tmp_path):
     assert not list(tmp_path.glob("f_L*.html"))              # intermediates removed
 
 
-@needs_browser
-def test_anim_manifest_builds_an_animated_slide(tmp_path):
+def test_anim_manifest_builds_an_animated_slide(tmp_path, chromium):
     html = tmp_path / "figs" / "a.html"
     html.parent.mkdir()
     html.write_text(ANIM_HTML, encoding="utf-8")

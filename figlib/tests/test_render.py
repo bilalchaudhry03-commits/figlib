@@ -1,13 +1,10 @@
 """figlib.render: finding LibreOffice, slide flags, the font check, and (where installed) a real render."""
 
-import os
-
 import pytest
 
+from conftest import SVG
 from figlib import outline, render
 
-SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">'
-       '<rect width="200" height="100" fill="#2a78d6"/></svg>')
 OUTLINE = """### S01 · A static slide
 - one bullet
 
@@ -83,16 +80,7 @@ def test_contact_sheet(tmp_path):
     assert w > 4 * render.THUMB_W and h > 2 * 270          # 4 columns, 2 rows
 
 
-def _have_soffice():
-    try:
-        render.find_soffice()
-    except FileNotFoundError:
-        return False
-    return not os.environ.get("FIGLIB_LIBREOFFICE_SIF")     # an image needs a compute node; skip
-
-
-@pytest.mark.skipif(not _have_soffice(), reason="LibreOffice not installed")
-def test_real_render(tmp_path):
+def test_real_render(tmp_path, soffice):
     pytest.importorskip("pypdfium2")
     r = render.render(_deck(tmp_path))
     assert len(r.pngs) == 2 and r.contact.exists() and r.pdf.exists()

@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
 
 from figlib import fonts  # noqa: E402
 from figlib.inputs import MissingInput, require  # noqa: E402
@@ -186,9 +185,8 @@ def test_check_layout_flags_a_figure_laid_out_in_another_face(tmp_path):
     assert r.returncode == 1 and "FONT" in r.stdout, r.stdout + r.stderr
 
 
-def test_faces_exist_before_the_figure_script_measures_text(tmp_path):
+def test_faces_exist_before_the_figure_script_measures_text(tmp_path, chromium):
     """A figure's own layout script runs during parsing; it must already see Carlito."""
-    pytest.importorskip("playwright")
     from playwright.sync_api import sync_playwright
     html = tmp_path / "fig.html"
     html.write_text(FIG.format(family=fonts.STACK))

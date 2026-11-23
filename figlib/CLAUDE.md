@@ -1,135 +1,94 @@
-# figlib — the figure toolchain
+# figlib — notes for working on the code
 
-Importable package for figure work: `from figlib import palette, figcheck, ...`. Named `figlib`, not
-`lib`, so it can't collide with the per-project `lib/` packages on `sys.path`; modules have no date
-prefix because they're library code, not run artifacts. `README.md` is the user-facing doc (written
-for labmates); this file is for working on the code.
-
-## Repo setup — read before committing
-
-- figlib is its own private repo, `bilalchaudhry03-commits/figlib`, shared with the Wühr lab. The
-  checkout is `/Genomics/wuehrlab/People/Bilal/pkgs/figlib`; wuhrlab's `Bilal/figlib` is a symlink to
-  `pkgs/figlib/figlib`, so existing imports, `python3 -m figlib.x`, `~/.fonts` and the
-  Manim bind all resolve without an install.
-- **Commit and push in `pkgs/figlib`.** wuhrlab doesn't track these files, so an edit made through
-  the symlink won't show in wuhrlab's `git status`.
-- No install is needed in the wuhrlab envs; the symlink covers it.
-- Della has its own clone at `pkgs/figlib`, pulled by hand.
-- History before 2026-11-17 is in wuhrlab (`git log -- figlib`).
-- Lab-specific defaults are intentional: the palette's named entities and `deck.Theme`. The Manim
-  image is not a default: export `FIGLIB_MANIM_SIF=/Genomics/wuehrlab/People/Bilal/envs/manim/manim.sif`
-  (envs' activate scripts or the explainer sbatch), or pass `sif=`. Nothing in the package reads the wuhrlab tree; checks of
-  wuhrlab's own scripts (entity-colour drift, known divergences) belong in wuhrlab's tests, using
-  `palette.drift_report(dir)`.
+`README.md` is for people using figlib; the skills in `plugins/figlib/skills/` are what Claude reads
+when using it. This file is for changing it. The package is `figlib`, not `lib`, so it can't collide
+with a project's own `lib/`; modules carry no date prefix because they are imported, not run once.
 
 ## Modules
 
 | module | what it does |
 |---|---|
-| `palette` | colour registry (entity / role / series) + CVD validator; stdlib only |
-| `figcheck` | matplotlib layout linter; in-process on the live `Figure` |
-| `check_layout` | the same for HTML+SVG — `python3 -m figlib.check_layout fig.html` |
-| `export_svg` | HTML → standalone SVG — `python3 -m figlib.export_svg fig.html fig.svg` |
-| `fonts` | vendored Carlito; registers with matplotlib, links for Chromium |
-| `inputs` | `require(path, why=…)` — declare a script's data inputs |
-| `deck` | .pptx assembly: `Theme`, SVG-with-PNG-fallback figures, equations, movies, `animate`, `lint_deck` |
-| `outline` | Markdown outline → .pptx via `deck` (format in its docstring); ported 2026-11-23 from the generals builder, which it reproduces byte for byte apart from equation-SVG `<dc:date>` stamps |
-| `layers` | HTML figure → per-click SVG layers (`build`) or layer PNGs + manifest + previews (`anim`), for `build:` / `animation:` in an outline; generalised 2026-11-23 from the generals make_build_layers / make_anim_layers scripts |
-| `starter/` | package data: the five-slide starter talk `python -m figlib.outline --starter DIR` copies. Regenerate its figures after editing: `python figs/make_figs.py`, `python -m figlib.layers build figs/workflow.html L1 L2 L3` |
-| `silhouette` | structure → flat per-chain outlines at a shared Å scale (CA, pLDDT ≥ 65 for predicted models only, dilate 4 Å, fill, smooth, contour; far-to-near; label anchors), AFDB fetch by UniProt ID with a cache, SVG/JSON/views sheet. Generalised 2026-11-23 from the generals cofold/opener/TurboID scripts and the 11-04 bait panel; reproduces the generals cofold JS exactly (all rings, anchors, sizes), and additionally keeps pieces ≥ 10% of the largest ring that the old scripts dropped. EBI returns 403 to a bare `figlib` User-Agent: keep the version in it |
-| `render` | .pptx → PDF → slide PNGs + contact sheet, LibreOffice headless (PATH, Mac/Windows install dirs, `FIGLIB_SOFFICE`, or `FIGLIB_LIBREOFFICE_SIF` on Argo, compute node only) + pypdfium2; fresh profile with Carlito *copied* into `user/fonts` (0.2.7: links dangle inside the Apptainer image, which only binds the work dir; verified by binding an empty dir over the image's own Carlito); exits 1 if the PDF uses a font the slides never declared (slide XML + theme Latin faces only — the theme's per-script lists include Arial/Times, which let a fallback pass in 0.2.6). Generals deck (25 slides, 34 MB): 2 m 11 s on 2 CPUs |
-| `anim` | frames → MP4 + GIF + poster + contact sheet; `.clipped` lists frames touching the edge |
-| `scene`, `clip` | explainer videos; Manim clips rendered in Apptainer |
+| `figcheck` | matplotlib layout linter, in-process on the live `Figure` |
+| `check_layout` | the same checks for HTML+SVG, in headless Chromium |
+| `export_svg` | HTML → standalone SVG for PowerPoint/Illustrator |
+| `palette` | colour registry (series / roles / named entities) + colour-blindness validator; stdlib only |
+| `fonts` | vendored Carlito (Calibri's metrics): matplotlib registration, browser injection |
+| `inputs` | `require(path, why=…)`: declare a script's data inputs |
+| `deck` | .pptx building blocks: `Theme`, SVG figures with PNG fallback, equations, movies, `animate`, `require_clean` |
+| `outline` | Markdown outline → .pptx through `deck`; the format is its docstring; `starter/` is the package-data talk `--starter` copies |
+| `render` | .pptx → PDF → slide PNGs + contact sheet, headless LibreOffice + pypdfium2, with a font check |
+| `layers` | HTML figure → per-click SVG layers (`build`) or moving layers + manifest (`anim`) for an outline |
+| `silhouette` | structure (file or UniProt ID via AlphaFold DB) → flat per-chain outlines at a shared Å scale |
+| `anim`, `scene`, `clip` | movies and explainer videos; `clip` renders Manim in Apptainer (`FIGLIB_MANIM_SIF`) |
 
-## Claude Code plugin
+## Releasing
 
-`.claude-plugin/marketplace.json` + `plugins/figlib/` make this repo a plugin marketplace with four
-skills under `plugins/figlib/skills/`: `figlib` (the API and checks; `references/decks.md`,
-`references/video.md`), `talk` (the outline → build → render → critique loop for decks, added 0.2.6),
-`scientific-figure-design` (how to design a schematic: layout, colour roles,
-type arithmetic, export traps) and `explainer-video` (workflow and gates). The last two are the
-de-labbed versions of Bilal's personal `scientific-figure-design` and wuhrlab's `explainer-video`
-skills, which were retired on 2026-11-18 once the plugin was installed on Argo (the originals are in
-wuhrlab `archive/claude_skills/` and git history). They are what labmates' Claude knows about figlib, so **update them when a
-public API or a usage rule changes**. `plugin.json` carries a `version`, so installed plugins update only on a release, in step with the
-package. Check with `claude plugin validate .`.
+`figlib/tests/test_release.py` fails unless these agree: `figlib.__version__`, `version` in
+`plugins/figlib/.claude-plugin/plugin.json`, and the `@vX.Y.Z` pins in `README.md` and the figlib
+skill's setup block (plus the not-installed eval's grader). Bump all, commit, `git tag -a vX.Y.Z`,
+push the tag. Installed plugins update only on a version change.
 
-**Releasing** (`figlib/tests/test_release.py` fails if these disagree): bump `figlib.__version__`, the
-`version` in `plugins/figlib/.claude-plugin/plugin.json`, the `@vX.Y.Z` pins in `README.md` and in the
-figlib skill's setup block; commit; `git tag -a vX.Y.Z`; push the tag.
+Before a release that touches render, outline, layers, deck or the HTML tools, run the manual
+`mac + windows check` workflow (`gh workflow run os-check.yml`); Argo can't test those paths.
+
+The skills are what labmates' Claude knows about figlib: **update them when a public API or a usage
+rule changes.** Keep detail in module docstrings and point to them, rather than copying it into
+the README and skills (the outline format lives only in `outline.py`).
 
 ## Things that aren't obvious from the code
 
-**Using figcheck**
-- Import it; never load it by path (`spec_from_file_location`) — its `@dataclass` needs the module in
+**Fonts**
+- Calibri is proprietary; Carlito has identical metrics. Layout checked in any other face is wrong
+  (DejaVu is ~25% wider), so every tool measures in Carlito and says so when it can't.
+- Browser tools call `fonts.use_in_browser(page)` before `goto`: an init script registers the TTFs as
+  'Calibri' and 'Carlito' from bytes, so they exist before the figure's own script measures text, on
+  any OS. A stylesheet added after load is too late; `~/.fonts` only works where Chromium uses fontconfig.
+- `check_layout` reports FONT when a text style's width differs from Carlito's by > 0.5%; monospace
+  stacks are skipped (code labels are deliberate).
+- `render` copies (not links) the TTFs into a throwaway LibreOffice profile: a link out of the work
+  dir dangles inside an Apptainer image. Its font check reads the font of each visible character:
+  LibreOffice embeds a default serif for empty text bodies that draws nothing, and the theme's
+  per-script font lists (Arial, Times…) are not "declared" fonts.
+- One copy of the TTFs, in `figlib/fonts/`. Don't vendor them elsewhere.
+
+**figcheck**
+- Import it; never load it by path (`spec_from_file_location`): its `@dataclass` needs the module in
   `sys.modules`.
 - A deliberate axis window is declared per axes with `ax.set_gid(figcheck.CLIP_OK_GID)`, never by
-  disabling `CLIPPED`. Still check plotted vs available point counts.
-
-**Fonts**
-- Calibri isn't on the cluster; DejaVu (the fallback) is ~25% wider, so layouts checked against it
-  don't hold. Carlito is metric-compatible and fontconfig maps Calibri → Carlito, so declared stacks
-  stay as they are. PNGs rendered here use Carlito; the SVG is the authority.
-- `check_layout`/`export_svg` call `fonts.use_in_browser(page)` before `goto`: an init script registers
-  the TTFs via the FontFace API from in-memory bytes as 'Calibri' and 'Carlito', so they exist before the
-  figure's own script measures text (tested: parse-time width = Carlito width) and it works on any OS.
-  A stylesheet added after load is too late; ~/.fonts only works where Chromium uses fontconfig. Since
-  2026-11-18 (exporter 1.3.0, check_layout 1.2.0); before that the tools symlinked ~/.fonts, which
-  would have crashed on Windows and been ignored on macOS. `check_layout` then measures each distinct
-  text style against Carlito and reports FONT if any differs by > 0.5% (monospace stacks skipped: code
-  labels in Consolas are deliberate; 0.2.0-0.2.3 failed 6 lab figures for them).
-- `python -m figlib.fonts` (the ~/.fonts link) is now optional, for other Chromium use on Linux.
-  Importing `figlib.fonts` only registers with matplotlib.
-- Don't copy the TTFs anywhere. One copy, in the repo.
+  disabling `CLIPPED`.
 
 **SVG export**
-- Every SVG carries `<metadata id="figlib-provenance">` with the exporter version. Run the tools as
-  `python -m figlib.<tool>`; don't keep copies of them anywhere else (the old skill shims are gone).
-- Arrowheads are baked to paths (Illustrator/PowerPoint don't honour SVG 2 marker orientation).
-  `--group` clusters loose siblings into `<g>`.
-- Computed styles are baked as attributes, `none` included (`fill`'s initial value is black). A class
-  rule that only recolours an authored colour attribute is *not* baked — some figures author white
-  numerals that a class greys on screen, and the white is intended.
-- Rebuild everything and report drift:
-  ```bash
-  python3 scripts/20260827_rebuild_figures.py            # re-export all, report drift, exit 1
-  python3 scripts/20260827_rebuild_figures.py --write    # install the regenerated SVGs
-  python3 scripts/20260827_rebuild_figures.py --status   # figure inventory vs the manifest
-  ```
-  A CHANGED line means "look", not "regression" — fixes show up as changes too. Never auto-accept.
+- Every SVG carries `<metadata id="figlib-provenance">` with the exporter version.
+- Arrowheads are baked to paths (PowerPoint/Illustrator ignore SVG 2 marker orientation).
+- Computed styles are baked as attributes, `none` included (`fill` defaults to black). A class rule
+  that only recolours an authored colour attribute is *not* baked: authored white numerals stay white.
 
 **Decks**
-- No secondary text, enforced in code: no subtitle/caption parameters, and `require_clean(prs)` fails
-  on non-footer text that is grey or < 18 pt. The footer is exempt by shape name (`FOOTER_NAME`).
-- Equations are pictures (`render_equation`, `add_equation`, `add_equation_column`), never scaled; `pt`
-  below `MIN_BODY_PT` or an equation wider than its box raises. Use `\dfrac`, not `\frac` (mathtext
-  sets `\frac` small). Glyphs are written as outlines because PowerPoint draws blanks for glyphs
-  Carlito lacks. `render_equation_parts` crops pieces to a shared height so they line up.
-- `animate(slide, steps, ...)`: one entry per click, phases in turn, effects together —
-  `("in"|"out", shape, ms)`, `("move", shape, ms, dx, dy)` or `("play", movie, ms)`. Motion paths are
-  relative to the layout position; `animate` tracks chained moves. `auto=` phases run when the slide
-  opens; `loop=` movies repeat. Writing the timing replaces python-pptx's media node for each movie, so
-  `animate` writes its own `<p:video>` node for every played movie (`repeatCount="indefinite"` when
-  looped); a movie that is never played gets none. Added 2026-11-19 for the generals S02 opener.
-- LibreOffice/PDF shows every layer at its start position and video slides as their poster, so
-  animations can only be checked in PowerPoint; QA motion from `anim.write(...).contact`.
-  QA render: `sbatch scripts/20261030_render_pptx_argo.sbatch <deck.pptx> <out_dir>`.
-- Movies are MP4 in the deck, GIF for Slack.
-- PNG fallbacks: cairosvg where native cairo exists (Linux; generals output unchanged), else headless
-  Chromium (`_chromium_png`, Carlito loaded, a browser per call so later sync_playwright() calls in the
-  process still work). cairosvg is imported lazily: at module top it made `figlib.deck` unimportable on
-  Windows (os-check, 2026-11-23, 0.2.8).
+- No secondary text, enforced in code: no subtitle/caption parameters, and `require_clean` fails on
+  non-footer text that is grey or < 18 pt (the footer is exempt by shape name, `FOOTER_NAME`).
+- Equations are pictures, never scaled: too small or too wide raises. `\dfrac`, not `\frac`. Glyphs
+  are outlines because PowerPoint draws blanks for glyphs Carlito lacks.
+- `animate` writes its own `<p:video>` node for every played movie (setting the timing replaces
+  python-pptx's); a movie never played gets none.
+- PNG fallbacks: cairosvg where native cairo loads (imported lazily: at module top it made `deck`
+  unimportable on Windows), else headless Chromium, a browser per call so later `sync_playwright()`
+  users in the process still work.
+- LibreOffice/PDF renders show every layer at once and movies as posters: check motion in PowerPoint.
 
-**Animation / video**
-- Frames stream into ffmpeg's stdin; only file-only renderers (PyMOL) get a frame directory, in scratch.
-- `anim.write`: `bg=` sets the edge-check and pad colour; the GIF is skipped above 20 s unless
-  `gif=True`; the poster is the middle frame. `anim.delivery_copy(mp4)` makes a 720p copy under the
-  30 MiB SendUserFile cap.
-- Explainer workflow and gates: `plugins/figlib/skills/explainer-video/SKILL.md`; in wuhrlab, outputs
-  go in `explainers/YYYYMMDD_topic/`.
+**Structures**
+- `silhouette` filters pLDDT only for predicted models (no resolution, no experimental method):
+  experimental B-factors are not confidence. EBI returns 403 to a bare `figlib` User-Agent; keep the
+  version in it.
+
+**Video**
+- Frames stream into ffmpeg's stdin; `anim.write` skips the GIF above 20 s unless `gif=True`.
 
 ## Tests
 
 ```bash
-source envs/analysis/bin/activate && pytest figlib/tests
+pip install -e ".[test]" && python -m playwright install chromium && pytest figlib/tests
 ```
+
+`tests/conftest.py` holds the shared SVG and the `chromium` / `soffice` skip fixtures: use them
+rather than probing per file. Set `FIGLIB_SOFFICE` to a wrapper script to test render through an
+Apptainer image.

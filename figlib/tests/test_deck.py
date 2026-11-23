@@ -8,10 +8,6 @@ from pptx.util import Inches, Pt
 
 from figlib import deck
 
-SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">'
-       '<rect width="200" height="100" fill="#2a78d6"/></svg>')
-
-
 def _deck_with_content(theme):
     prs = deck.new_presentation()
     deck.title_slide(prs, theme, "A title", "A. Presenter")
@@ -26,9 +22,8 @@ def test_slide_is_exact_16x9():
     assert "type" not in prs._element.find(deck.qn("p:sldSz")).attrib
 
 
-def test_svg_rides_on_png_blip(tmp_path):
-    svg = tmp_path / "f.svg"
-    svg.write_text(SVG)
+def test_svg_rides_on_png_blip(tmp_path, svg_file):
+    svg = svg_file
     prs, s, box = _deck_with_content(deck.Theme())
     pic = deck.add_figure(s, svg, box, tmp_path / "cache")
     assert pic.width / pic.height == pytest.approx(2.0, rel=0.01)
@@ -144,9 +139,8 @@ def test_calibri_first_fixes_carlito_only_mathtext():
     assert 'font-family="Calibri, Arial, sans-serif"' in out
 
 
-def test_build_on_click_fades_each_layer_in_order(tmp_path):
-    svg = tmp_path / "f.svg"
-    svg.write_text(SVG)
+def test_build_on_click_fades_each_layer_in_order(tmp_path, svg_file):
+    svg = svg_file
     prs, s, box = _deck_with_content(deck.Theme())
     pics = [deck.add_figure(s, svg, box, tmp_path / "cache") for _ in range(3)]
     deck.build_on_click(s, pics[1:], dur_ms=100)
@@ -166,9 +160,8 @@ def test_build_on_click_fades_each_layer_in_order(tmp_path):
     assert {c.find(deck.qn("p:cBhvr")).find(deck.qn("p:cTn")).get("dur") for c in effects} == {"100"}
 
 
-def test_animate_moves_accumulate_and_phases_chain(tmp_path):
-    svg = tmp_path / "f.svg"
-    svg.write_text(SVG)
+def test_animate_moves_accumulate_and_phases_chain(tmp_path, svg_file):
+    svg = svg_file
     prs, s, box = _deck_with_content(deck.Theme())
     a, b = (deck.add_figure(s, svg, box, tmp_path / "cache") for _ in range(2))
     W, H = prs.slide_width, prs.slide_height
@@ -286,18 +279,10 @@ def test_equation_parts_share_a_baseline(tmp_path):
     assert r"\cdot" not in "" and "<text" not in r[1][0].read_text()
 
 
-def test_fallback_png_without_native_cairo_uses_chromium(tmp_path, monkeypatch):
+def test_fallback_png_without_native_cairo_uses_chromium(tmp_path, monkeypatch, svg_file, chromium):
     # Windows has no libcairo, so cairosvg can't even be imported there (os-check, 2026-11-23).
-    pytest.importorskip("playwright")
-    from playwright.sync_api import sync_playwright
-    try:
-        with sync_playwright() as p:
-            p.chromium.launch().close()
-    except Exception:
-        pytest.skip("Chromium not installed")
     monkeypatch.setattr(deck, "_cairosvg", lambda: None)
-    svg = tmp_path / "f.svg"
-    svg.write_text(SVG)
+    svg = svg_file
     png = deck.fallback_png(svg, tmp_path / "cache")
     im = Image.open(png).convert("RGB")
     assert im.size == (deck.FALLBACK_PX_WIDTH, deck.FALLBACK_PX_WIDTH // 2)

@@ -3,15 +3,12 @@ reports nothing.
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pytest  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from figlib import figcheck  # noqa: E402
 
 

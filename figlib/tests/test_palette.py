@@ -2,14 +2,11 @@
 scanners find hardcoded colours that disagree with the registry.
 """
 import sys
-from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]   # holds the figlib package; lets pytest run uninstalled
-sys.path.insert(0, str(ROOT))
-
-from figlib import palette as pal  # noqa: E402
+from conftest import REPO
+from figlib import palette as pal
 
 
 def test_validator_reproduces_the_documented_reference_values():
@@ -192,6 +189,6 @@ def test_drift_cli_exits_nonzero_on_disagreement(tmp_path):
     import subprocess
     _write(tmp_path / "wrong.py", 'FAM = {"GNN": "#009e73"}\n')
     r = subprocess.run([sys.executable, "-m", "figlib.palette", "drift", str(tmp_path)],
-                       capture_output=True, text=True, cwd=ROOT)
+                       capture_output=True, text=True, cwd=REPO)
     assert r.returncode == 1, r.stderr
     assert "GNN: #009e73" in r.stdout

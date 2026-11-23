@@ -52,12 +52,10 @@ What to say.
 - one-line bullet
 ```
 
-`### S01 · …` main slides, `### B01 · …` backup; a heading without an id is ignored. Key lines:
-`figure:`, `build:` (a layer per click), `equation:` (mathtext, no `$`; use `\dfrac`), `derivation:`
-(equations revealed line by line), `movie: label | a.mp4 | poster.png`, `tag: Expected result`
-(for illustrative data), `animation:`, `- bullet`, `notes:`. The full reference is
-`python -m figlib.outline --help` plus the module docstring (`python -c "import figlib.outline as o; help(o)"`).
-Paths are relative to the outline (or to `root:` in the front matter).
+`### S01 · …` main slides, `### B01 · …` backup (a heading without an id is not a slide). Other key
+lines: `build:`, `equation:`, `derivation:`, `movie:`, `tag:`, `animation:`. Their syntax is the
+module docstring, the one reference: `python -c "import figlib.outline as o; help(o)"`. Paths are
+relative to the outline, or to `root:` in the front matter.
 
 ## The loop
 

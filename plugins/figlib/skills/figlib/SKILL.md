@@ -1,6 +1,6 @@
 ---
 name: figlib
-description: Make slide- and paper-ready scientific figures with the figlib Python package. Use when creating, editing or checking matplotlib figures or HTML+SVG schematics, exporting a figure to SVG for PowerPoint or Illustrator, choosing figure colours, building a .pptx slide deck for a talk (with figlib.deck, which enforces title + content only), or rendering animations and explainer videos — in any project that has figlib installed or asks for it.
+description: Make slide- and paper-ready scientific figures with the figlib Python package. Use when creating, editing or checking matplotlib figures or HTML+SVG schematics, exporting a figure to SVG for PowerPoint or Illustrator, choosing figure colours, drawing protein outlines from structures, or rendering animations and explainer videos. For a whole talk or slide deck, use the talk skill instead — in any project that has figlib installed or asks for it.
 ---
 
 # figlib
@@ -15,16 +15,16 @@ dropped. Use its checks instead of eyeballing a PNG.
 python -c "import figlib, sys; print(figlib.__version__, sys.executable)"   # which figlib, in which Python
 ```
 
-This skill matches figlib **0.3.0**. If figlib is missing, install it into the project's environment (its
+This skill matches figlib **0.3.1**. If figlib is missing, install it into the project's environment (its
 venv or conda env). If the project has none, ask the user which to use; never install into the system
 Python or with `--user`.
 
 ```bash
-pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.3.0"
+pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.3.1"
 python -m playwright install chromium     # once per machine, for check_layout / export_svg
 ```
 
-If the installed version is older than 0.3.0, tell the user and offer to upgrade with the same line; some
+If the installed version is older than 0.3.1, tell the user and offer to upgrade with the same line; some
 calls in this skill may not exist in older versions. Extras, if they want less: `html`, `deck`, `video`, `structure`.
 Carlito is a free font with Calibri's exact letter widths, so a layout checked here holds in PowerPoint.
 PNGs rendered here use Carlito; for HTML figures the exported SVG is the authority.

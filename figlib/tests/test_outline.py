@@ -3,10 +3,8 @@
 import pytest
 from pptx import Presentation
 
+from conftest import SVG
 from figlib import outline
-
-SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">'
-       '<rect width="200" height="100" fill="#2a78d6"/></svg>')
 
 OUTLINE = """---
 author: A. Presenter
