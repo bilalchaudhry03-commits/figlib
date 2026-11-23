@@ -29,7 +29,7 @@ below), `scientific-figure-design` (schematics that read in 30 seconds) and `exp
 | `outline`, `render` | a talk written as a Markdown outline, built into a `.pptx`, rendered to slide images | `python -m figlib.outline talk.md` |
 | `figcheck` | lint a matplotlib figure: overlapping or off-canvas text, type too small on a slide, **data an axis limit silently hid** | `figcheck.require(fig)` |
 | `check_layout`, `export_svg` | the same checks for HTML+SVG schematics, and an SVG export that opens correctly in PowerPoint and Illustrator | `python -m figlib.export_svg fig.html fig.svg` |
-| `silhouette` | protein outlines from structures (AlphaFold DB by UniProt ID, or your .cif) at true relative size | `python -m figlib.silhouette P52292 --svg x.svg` |
+| `silhouette` | protein outlines from structures (AlphaFold DB by UniProt ID, or your .cif) at true relative size; complexes as grouped shapes, rings with open channels | `python -m figlib.silhouette P52292 --svg x.svg` |
 | `layers` | click-by-click builds and animations from an HTML figure | `python -m figlib.layers build fig.html L1 L2` |
 | `palette` | colours that stay distinct for colour-blind viewers, and a validator for your own | `palette.validate([...])` |
 | `deck` | the `.pptx` building blocks the outline uses (SVG figures, equations, movies, animation) | |
@@ -61,7 +61,9 @@ What to say over this slide.
 is the evidence, everything else goes in the notes. Builds, equations, movies and animations: see the
 format at the top of [`figlib/outline.py`](figlib/outline.py). The build fails on grey or small text
 and on any missing figure. In the render, slides with clicks or animations show every layer at once
-(marked on the contact sheet): check those in PowerPoint.
+(marked on the contact sheet): check those in PowerPoint. For a PDF to send, build
+`python -m figlib.outline talk.md --handout` and render `talk_handout.pptx`: animated slides show their
+final frame.
 
 To start a single figure instead, copy [`examples/figcheck_example.py`](examples/figcheck_example.py)
 (matplotlib) or [`examples/schematic_template.html`](examples/schematic_template.html) (HTML+SVG
@@ -72,8 +74,8 @@ schematic); both pass the checks as they are.
 Python 3.10+ and git:
 
 ```bash
-pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.3.1"     # everything
-pip install "figlib @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.3.1"          # matplotlib linter + palette only
+pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.4.0"     # everything
+pip install "figlib @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.4.0"          # matplotlib linter + palette only
 python -m playwright install chromium                                                           # once, for the HTML tools
 ```
 

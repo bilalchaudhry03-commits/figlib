@@ -88,6 +88,24 @@ trusted until it's fixed.
 - Nothing overflows the slide or collides in the render.
 - Illustrative (not real) data carries `tag: Expected result`.
 
+## The audience pass
+
+The per-slide checklist catches layout; it doesn't catch a talk that loses its audience. Once the
+deck is complete, and again before a high-stakes talk (a committee, a defense), review it as that
+audience would, from the contact sheet and the notes together:
+
+- Read only what is on screen, slide by slide. Where does a viewer get lost, or need something that
+  is only in the notes (a number, a control, a definition)? Move it on screen or cut the gap.
+- Write the questions this audience will ask, slide by slide, most damaging first. For each, say
+  whether the talk already answers it, the notes cover it, or nothing does (a backup-slide candidate).
+- Check the arc: does each slide's claim follow from the previous ones, and does the last slide
+  answer the first?
+- Ignore "layers stacked" slides' overlaps: that is the render, not the deck (check those clicks in
+  `<stem>_preview/` or PowerPoint).
+
+Report it to the user as a short list (gaps, top questions, proposed backup slides), not as edits:
+they choose what to change.
+
 ## Figures and builds
 
 - Keep each figure's source next to it in `figs/` (script or HTML) and regenerate rather than
@@ -110,3 +128,7 @@ trusted until it's fixed.
 - Keep the deck building at every step; a build that exits 1 is not a deck to hand over.
 - When handing over: the .pptx path, the contact sheet, slides with clicks/animations to check in
   PowerPoint, and anything still MISSING or marked `[DRAFT]` in notes.
+- A PDF to send (committee pre-read, Slack) is never a render of the live deck, whose animated
+  slides draw every layer at once: `python -m figlib.outline talk.md --handout`, then
+  `python -m figlib.render talk_handout.pptx`, and send `talk_handout_render/talk_handout.pdf`.
+  Animated slides show their final frame; any listed as having none, re-run `figlib.layers anim`.

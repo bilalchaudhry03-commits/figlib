@@ -1,5 +1,7 @@
 """figlib.outline: front matter, the slide format, and an end-to-end build."""
 
+import json
+
 import pytest
 from pptx import Presentation
 
@@ -109,3 +111,24 @@ def test_no_logo_means_no_slot_and_a_missing_logo_is_reported(tmp_path):
     assert not [sh for s in prs.slides for sh in s.shapes if sh.name.startswith("logo")]
     md.write_text(OUTLINE.replace("root: assets", "root: assets\nlogo: shield.png").split("### B01")[0], encoding="utf-8")
     assert outline.build(md).missing == [("logo", "shield.png")]
+
+
+def test_handout_flattens_animations_to_their_final_frame(tmp_path):
+    from PIL import Image
+    for name in ("a_base.png", "a_dot.png", "a_final.png"):
+        Image.new("RGBA", (400, 200), (42, 120, 214, 255)).save(tmp_path / name)
+    man = {"canvas": [400, 200], "layers": [{"id": "base", "png": "a_base.png"}, {"id": "dot", "png": "a_dot.png"}],
+           "steps": [[[["in", "dot", 300]]]], "final": "a_final.png"}
+    (tmp_path / "a_anim.json").write_text(json.dumps(man), encoding="utf-8")
+    md = tmp_path / "talk.md"
+    md.write_text("### S01 · Moves\nanimation: a_anim.json\n", encoding="utf-8")
+    live = Presentation(outline.build(md).out).slides[0]
+    r = outline.build(md, handout=True)
+    assert r.out.name == "talk_handout.pptx" and r.stacked == []
+    flat = Presentation(r.out).slides[0]
+    pics = lambda s: [sh for sh in s.shapes if sh.shape_type == 13]
+    assert len(pics(live)) == 2 and len(pics(flat)) == 1
+    assert "<p:anim" not in flat._element.xml and "<p:set" not in flat._element.xml
+    del man["final"]                                             # an older manifest: no final frame
+    (tmp_path / "a_anim.json").write_text(json.dumps(man), encoding="utf-8")
+    assert outline.build(md, handout=True).stacked == ["S01"]

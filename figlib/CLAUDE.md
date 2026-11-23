@@ -15,10 +15,10 @@ with a project's own `lib/`; modules carry no date prefix because they are impor
 | `fonts` | vendored Carlito (Calibri's metrics): matplotlib registration, browser injection |
 | `inputs` | `require(path, why=…)`: declare a script's data inputs |
 | `deck` | .pptx building blocks: `Theme`, SVG figures with PNG fallback, equations, movies, `animate`, `require_clean` |
-| `outline` | Markdown outline → .pptx through `deck`; the format is its docstring; `starter/` is the package-data talk `--starter` copies |
+| `outline` | Markdown outline → .pptx through `deck`; the format is its docstring; `--handout` flattens `animation:` slides to the manifest's `final` frame; `starter/` is the package-data talk `--starter` copies |
 | `render` | .pptx → PDF → slide PNGs + contact sheet, headless LibreOffice + pypdfium2, with a font check |
 | `layers` | HTML figure → per-click SVG layers (`build`) or moving layers + manifest (`anim`) for an outline |
-| `silhouette` | structure (file or UniProt ID via AlphaFold DB) → flat per-chain outlines at a shared Å scale |
+| `silhouette` | structure (file or UniProt ID via AlphaFold DB) → flat outlines at a shared Å scale; same label = one shape, `ring` view, `keep_holes`, `--js` for HTML figures |
 | `anim`, `scene`, `clip` | movies and explainer videos; `clip` renders Manim in Apptainer (`FIGLIB_MANIM_SIF`) |
 
 ## Releasing
@@ -79,6 +79,9 @@ the README and skills (the outline format lives only in `outline.py`).
 - `silhouette` filters pLDDT only for predicted models (no resolution, no experimental method):
   experimental B-factors are not confidence. EBI returns 403 to a bare `figlib` User-Agent; keep the
   version in it.
+- Rings are outer pieces (>= 10% of the largest) then holes (inside an outer piece, >= 200 Å², only
+  with `keep_holes`): consumers must draw with fill-rule evenodd. The `ring` axis comes from the
+  individual chains' centres, so subunits merged into one label still find it.
 
 **Video**
 - Frames stream into ffmpeg's stdin; `anim.write` skips the GIF above 20 s unless `gif=True`.

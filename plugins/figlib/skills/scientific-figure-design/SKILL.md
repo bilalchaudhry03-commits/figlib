@@ -101,10 +101,31 @@ python -m figlib.silhouette cofold.cif --chains A=XPO1,B=RanGTP,C=cargo --view 3
 - Pick the view from the `--views` sheet (24 views at one scale) and show it to the user; the default
   (`2:90`) is the largest outline with the long axis horizontal.
 - `--svg` is a finished figure (palette colours, labels) for a slide or an outline's `figure:`. For a
-  schematic with arrows and context, use `--json` and draw the rings in the HTML figure (Ångström
-  coordinates, y down; place each chain's label at its `anchor` or on a leader line to it).
+  schematic with arrows and context, use `--js figs/x.js` and load it with `<script src>` (a page opened
+  from disk can't fetch() JSON); draw each chain's `rings` with `fill-rule="evenodd"` (outer pieces, then
+  holes; Ångström, y down) and put its label at `anchor` or on a leader line to it.
+- Big complexes: give chains the same label to draw them as one shape (`--chains` with core / caps for a
+  proteasome; `*=name` for all). Rings: `--view ring --keep-holes --radius 3 --smooth 1` looks into the
+  channel and keeps it open.
 - Keep each protein's colour the same across the whole talk (identity colour, below).
 - Cite AlphaFold DB (CC BY 4.0) in the notes when its models are used.
+
+## Organelles, cells and organisms: licensed icons, simplified
+
+For things that aren't single proteins (a nuclear pore, a cell, an oocyte, a frog, a tube), start
+from an existing icon rather than drawing freehand. **BioCartoon** (`pip install biocartoon`, into the
+project's environment; `biocartoon --help`) searches ~16.5k icons from several libraries, and each
+icon keeps its own licence:
+
+- Prefer CC0 / public domain. CC BY is fine with an attribution in the speaker notes. Avoid CC BY-SA
+  for figures that will be reused or published.
+- Prefer flat icons. Shaded or gradient ones fight the house style and export badly; rebuild them in
+  flat shapes if they're the only accurate option.
+- Check the biology: a "generic" icon can be wrong for your system (a mammalian oocyte with a zona
+  pellucida is not a Xenopus oocyte).
+- Simplify for slide scale: full detail turns to noise at panel size (a pore's filaments read as
+  insect legs). Keep the parts the slide's argument needs; draw context in grey (`pal.ROLE`).
+- On a shared cluster, point its catalogue cache at the project or scratch, not the home directory.
 
 ## Structure
 

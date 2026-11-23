@@ -19,7 +19,7 @@ the outline: `figure: fig_L1.svg`, then one `build: fig_Lk.svg` per later layer.
 with kind "in", "out" or "move" (dx, dy in canvas units). This writes one full-canvas PNG per
 layer (Chromium at 3x; every layer but the first transparent), the manifest <stem>_anim.json
 (`animation:` in the outline), and preview frames <stem>_preview/<k>.png for looking at the
-clicks, which no PDF render can show.
+clicks, which no PDF render can show; the last one is the manifest's `final` (outline --handout).
 
 Both outputs are generated: re-run after every edit of the HTML, never edit them. Needs the
 `html` extra (Playwright + Chromium). Generalised 2026-11-23 from the generals talk's
@@ -98,8 +98,9 @@ def anim(html: Path, *, viewport: tuple[int, int] = (1640, 760), wait_ms: int = 
             svg.screenshot(path=str(prev_dir / f"{k}.png"))
         browser.close()
     man = src.with_name(f"{src.stem}_anim.json")
+    final = f"{prev_dir.name}/{len(spec['steps'])}.png"        # the last click: outline --handout shows it
     man.write_text(json.dumps({"source": src.name, "canvas": spec["canvas"], "layers": layers,
-                               "steps": spec["steps"]}, indent=1) + "\n")
+                               "steps": spec["steps"], "final": final}, indent=1) + "\n")
     return man
 
 

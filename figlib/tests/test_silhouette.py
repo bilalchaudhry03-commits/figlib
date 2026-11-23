@@ -143,3 +143,59 @@ def test_cli_views_and_svg(tmp_path):
                    "--json", str(tmp_path / "x.json"), "--views", str(tmp_path / "v.png")]) == 0
     assert (tmp_path / "v.png").stat().st_size > 1000
     assert json.loads((tmp_path / "x.json").read_text())["chains"][0]["name"] in {"rod", "B"}
+
+
+def _ring(tmp_path):
+    """Six 80-residue arcs (60 deg each) on a 40 A circle in the xy plane: a connected hexamer with a
+    ~30 A channel down z."""
+    rng = np.random.default_rng(1)
+    st = gemmi.Structure()
+    model = gemmi.Model("1")
+    for k, cid in enumerate("ABCDEF"):
+        t = k * np.pi / 3
+        ch = gemmi.Chain(cid)
+        a = t + rng.uniform(-np.pi / 6, np.pi / 6, 80)
+        r = 40 + rng.normal(0, 3, 80)
+        for i, (x, y, z) in enumerate(np.c_[r * np.cos(a), r * np.sin(a), rng.normal(0, 6, 80)]):
+            res = gemmi.Residue()
+            res.name, res.seqid = "ALA", gemmi.SeqId(i + 1, " ")
+            at = gemmi.Atom()
+            at.name, at.element, at.pos, at.b_iso = "CA", gemmi.Element("C"), gemmi.Position(x, y, z), 90.0
+            res.add_atom(at)
+            ch.add_residue(res)
+        model.add_chain(ch)
+    st.add_model(model)
+    st.setup_entities()
+    path = tmp_path / "ring.cif"
+    st.make_mmcif_document().write_file(str(path))
+    return path
+
+
+def test_same_label_merges_chains_and_star_merges_all(tmp_path):
+    coords, _, _ = S.load(_structure(tmp_path), {"A": "both", "B": "both"})
+    assert list(coords) == ["both"] and len(coords["both"]) == 90
+    coords, _, _ = S.load(_structure(tmp_path), {"*": "all"})
+    assert list(coords) == ["all"] and len(coords["all"]) == 90
+    with pytest.raises(ValueError, match="can't be combined"):
+        S.load(_structure(tmp_path), {"*": "all", "A": "x"})
+
+
+def test_ring_view_keeps_the_channel_open_only_when_asked(tmp_path):
+    one = {c: "hexamer" for c in "ABCDEF"}
+    open_ = S.silhouette(_ring(tmp_path), one, "ring", keep_holes=True, radius=3, smooth=1)
+    shut = S.silhouette(_ring(tmp_path), one, "ring")
+    assert len(open_.chains) == 1 and len(open_.chains[0].rings) == 2      # outer + channel
+    assert len(shut.chains[0].rings) == 1
+    assert abs(open_.w - open_.h) < 0.25 * open_.w                          # looking down the axis: round
+    assert 'fill-rule="evenodd"' in S.svg(open_)
+    with pytest.raises(ValueError, match=">= 3 subunits"):
+        S.project({"a": np.random.default_rng(0).normal(size=(20, 3))}, "ring")
+
+
+def test_js_output_for_html_figures(tmp_path):
+    assert S.js_name(tmp_path / "miss_complexes.js") == "MISS_COMPLEXES"
+    assert S.js_name(tmp_path / "20261120_fig.js") == "S_20261120_FIG"
+    out = tmp_path / "x.js"
+    assert S.main([str(_structure(tmp_path)), "--js", str(out), "--var", "COFOLD"]) == 0
+    text = out.read_text()
+    assert text.splitlines()[1].startswith("window.COFOLD = {") and text.rstrip().endswith("};")

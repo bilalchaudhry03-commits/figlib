@@ -56,8 +56,11 @@ def test_anim_manifest_builds_an_animated_slide(tmp_path, chromium):
     spec = json.loads(man.read_text())
     assert [la["png"] for la in spec["layers"]] == ["a_base.png", "a_dot.png"]
     assert len(list((tmp_path / "figs" / "a_preview").glob("*.png"))) == 3
+    assert spec["final"] == "a_preview/2.png" and (tmp_path / "figs" / spec["final"]).exists()
     md = tmp_path / "talk.md"
     md.write_text("### S01 · Moves\nanimation: figs/a_anim.json\n", encoding="utf-8")
     r = outline.build(md)
     assert r.missing == []
     assert render.slide_flags(r.out)[0] == [1]
+    h = outline.build(md, handout=True)
+    assert h.stacked == [] and render.slide_flags(h.out)[0] == []           # flat: nothing stacks in a PDF

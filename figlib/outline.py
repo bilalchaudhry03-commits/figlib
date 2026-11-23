@@ -2,6 +2,7 @@
 
     python -m figlib.outline talk.md            # writes talk.pptx beside it (or `out:`)
     python -m figlib.outline --starter mytalk   # a five-slide starter talk to edit
+    python -m figlib.outline talk.md --handout  # talk_handout.pptx: animated slides as their final frame
 
 Edit the outline, never the .pptx: a rebuild overwrites it. Ported from the generals-talk
 builder (wuhrlab admin/generals/slides/py/20261030_build_generals_deck.py, 2026-11-23), which
@@ -43,6 +44,11 @@ assertions: what the audience should conclude. Key lines under the heading:
 The deck fails to build on grey or sub-18 pt text (`deck.require_clean`), and the CLI exits 1
 on any missing figure or movie, so a placeholder never reaches the room silently. Notes that
 contain `[DRAFT]` are listed after the build.
+
+A PDF of a deck draws every animation layer at once. For a copy to send (a committee pre-read,
+Slack), build with `--handout` and render that: each `animation:` slide shows its final frame (the
+manifest's `final`, written by `figlib.layers anim`); click-by-click `build:` slides need nothing,
+since all layers at once IS their last click. Slides with no final frame are listed.
 """
 
 from __future__ import annotations
@@ -72,6 +78,7 @@ class Report:
     backup: int
     missing: list = field(default_factory=list)     # (slide id, path)
     drafts: list = field(default_factory=list)      # slide ids with [DRAFT] in their notes
+    stacked: list = field(default_factory=list)     # handout: animated slides with no final frame
 
 
 def front_matter(text: str) -> tuple[dict, str]:
@@ -139,17 +146,21 @@ def parse(text: str) -> list[dict]:
 
 def build(outline: Path, out: Path | None = None, *, theme: deck.Theme | None = None,
           author: str | None = None, root: Path | None = None,
-          cache_dir: Path | None = None) -> Report:
+          cache_dir: Path | None = None, handout: bool = False) -> Report:
     """Build `outline` into a .pptx and save it. Arguments override the front matter.
-    Missing figures/movies are skipped and listed in `Report.missing`; check it."""
+    Missing figures/movies are skipped and listed in `Report.missing`; check it. `handout`: animated
+    slides as their final frame, written to <out>_handout.pptx unless `out` is given."""
     outline = Path(outline).resolve()
+    explicit_out = out is not None
     meta, body = front_matter(outline.read_text(encoding="utf-8-sig"))   # -sig: Windows editors may add a BOM
     here = outline.parent
     root = Path(root) if root is not None else (here / meta["root"]).resolve() if "root" in meta else here
     out = Path(out) if out is not None else here / meta["out"] if "out" in meta else outline.with_suffix(".pptx")
+    if handout and not explicit_out:
+        out = out.with_name(out.stem + "_handout.pptx")
     cache = Path(cache_dir) if cache_dir is not None else out.parent / "_generated"
     author = author if author is not None else meta.get("author", "")
-    missing = []
+    missing, stacked = [], []
     if theme is None:
         logos = {k: root / meta[k] for k in ("logo", "title_logo") if k in meta}
         missing += [(k, meta[k]) for k, p in logos.items() if not p.exists()]   # slot shows; build fails
@@ -204,6 +215,12 @@ def build(outline: Path, out: Path | None = None, *, theme: deck.Theme | None = 
                 def at(p):
                     # root-relative (older manifests), else beside the manifest (figlib.layers anim)
                     return root / p if (root / p).exists() else man_path.parent / p
+                final = at(man["final"]) if man.get("final") else None
+                if handout and final is not None and final.exists():
+                    deck.add_figure(slide, final, box, cache)       # the last click, flat
+                    man = {"layers": []}
+                elif handout:
+                    stacked.append(s["id"])
                 pics = {}
                 for lay in man["layers"]:
                     # a layer is a PNG, or an MP4 with its poster; both fit `box` the same way
@@ -214,7 +231,7 @@ def build(outline: Path, out: Path | None = None, *, theme: deck.Theme | None = 
                         pics[lay["id"]] = deck.add_movie(slide, at(lay["mp4"]), at(lay["poster"]), box)
                     else:
                         pics[lay["id"]] = deck.add_figure(slide, at(lay["png"]), box, cache)
-                if len(pics) == len(man["layers"]):
+                if man["layers"] and len(pics) == len(man["layers"]):
                     emu = next(iter(pics.values())).width / man["canvas"][0]     # EMU per canvas unit
 
                     def conv(click):
@@ -267,7 +284,7 @@ def build(outline: Path, out: Path | None = None, *, theme: deck.Theme | None = 
     prs.save(out)
     n_main = sum(s["id"].startswith("S") for s in slides)
     return Report(out=out, main=n_main, backup=len(slides) - n_main, missing=missing,
-                  drafts=[s["id"] for s in slides if "[DRAFT]" in "\n".join(s["notes"])])
+                  drafts=[s["id"] for s in slides if "[DRAFT]" in "\n".join(s["notes"])], stacked=stacked)
 
 
 def starter(dest: Path) -> Path:
@@ -285,6 +302,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m figlib.outline", description=__doc__.split("\n")[0])
     ap.add_argument("outline", type=Path, nargs="?")
     ap.add_argument("-o", "--out", type=Path, help="output .pptx (overrides front matter `out:`)")
+    ap.add_argument("--handout", action="store_true",
+                    help="animated slides as their final frame, for a PDF to send (writes <name>_handout.pptx)")
     ap.add_argument("--starter", type=Path, metavar="DIR",
                     help="copy a five-slide starter talk into DIR (new or empty) instead of building")
     a = ap.parse_args(argv)
@@ -293,10 +312,13 @@ def main(argv=None) -> int:
         return 0
     if a.outline is None:
         ap.error("give an outline to build, or --starter DIR")
-    r = build(a.outline, a.out)
+    r = build(a.outline, a.out, handout=a.handout)
     print(f"wrote {r.out}: {r.main} main + {r.backup} backup slides")
     if r.drafts:
         print(f"  [DRAFT] flagged in notes: {', '.join(r.drafts)}")
+    if r.stacked:
+        print(f"  handout: no final frame for {', '.join(r.stacked)} -- these still show every layer at once"
+              " (re-run python -m figlib.layers anim on their figures)")
     for sid, f in r.missing:
         print(f"  MISSING {sid}: {f}")
     return 1 if r.missing else 0
