@@ -16,7 +16,7 @@ with a project's own `lib/`; modules carry no date prefix because they are impor
 | `inputs` | `require(path, why=…)`: declare a script's data inputs |
 | `deck` | .pptx building blocks: `Theme`, SVG figures with PNG fallback, equations, movies, `animate`, `require_clean` |
 | `outline` | Markdown outline → .pptx through `deck`; the format is its docstring; `--handout` flattens `animation:` slides to the manifest's `final` frame; `starter/` is the package-data talk `--starter` copies |
-| `render` | .pptx → PDF → slide PNGs + contact sheet, headless LibreOffice + pypdfium2, with a font check |
+| `render` | .pptx → PDF (PowerPoint if installed, else headless LibreOffice) → slide PNGs + contact sheet via pypdfium2, with a font check |
 | `layers` | HTML figure → per-click SVG layers (`build`) or moving layers + manifest (`anim`) for an outline |
 | `silhouette` | structure (file or UniProt ID via AlphaFold DB) → flat outlines at a shared Å scale; same label = one shape, `ring` view, `keep_holes`, `--js` for HTML figures |
 | `anim`, `scene`, `clip` | movies and explainer videos; `clip` renders Manim in Apptainer (`FIGLIB_MANIM_SIF`) |
@@ -49,6 +49,12 @@ the README and skills (the outline format lives only in `outline.py`).
   dir dangles inside an Apptainer image. Its font check reads the font of each visible character:
   LibreOffice embeds a default serif for empty text bodies that draws nothing, and the theme's
   per-script font lists (Arial, Times…) are not "declared" fonts.
+- With PowerPoint installed, `render` uses it (COM on Windows, osascript on Mac) and LibreOffice
+  is only the fallback; Argo has no PowerPoint, so the cluster keeps the LibreOffice/Apptainer path.
+  Calibration (2026-11-23, PowerPoint 16 vs LibreOffice 26.8 on Windows and 24.2 + Carlito on Linux):
+  same line breaks except in a band ~0.6-0.8% past the box width, where LibreOffice keeps on one line
+  what PowerPoint wraps (its lines run ~0.1-0.2% narrower: ff/ti/fl/tt ligatures plus ~1 pt per line);
+  LibreOffice text also sits ~1.5 pt lower. So a LibreOffice render can miss a wrap, never invent one.
 - One copy of the TTFs, in `figlib/fonts/`. Don't vendor them elsewhere.
 
 **figcheck**
@@ -92,6 +98,7 @@ the README and skills (the outline format lives only in `outline.py`).
 pip install -e ".[test]" && python -m playwright install chromium && pytest figlib/tests
 ```
 
-`tests/conftest.py` holds the shared SVG and the `chromium` / `soffice` skip fixtures: use them
-rather than probing per file. Set `FIGLIB_SOFFICE` to a wrapper script to test render through an
+`tests/conftest.py` holds the shared SVG and the `chromium` / `soffice` / `powerpoint` skip
+fixtures: use them rather than probing per file. CI has no Office, so the real PowerPoint render
+only runs on a machine with it. Set `FIGLIB_SOFFICE` to a wrapper script to test render through an
 Apptainer image.

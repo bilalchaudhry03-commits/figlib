@@ -1,6 +1,6 @@
-"""Shared test fixtures: a small SVG, and skips for tests that need Chromium or LibreOffice.
+"""Shared test fixtures: a small SVG, and skips for tests that need Chromium, LibreOffice or PowerPoint.
 
-Use the `chromium` / `soffice` fixtures rather than probing in each file, so every test skips
+Use the `chromium` / `soffice` / `powerpoint` fixtures rather than probing in each file, so every test skips
 for the same reason and the probe runs once per session.
 """
 import os
@@ -52,3 +52,11 @@ def soffice():
         pytest.skip("LibreOffice not installed")
     if os.environ.get("FIGLIB_LIBREOFFICE_SIF") and not os.environ.get("FIGLIB_SOFFICE"):
         pytest.skip("LibreOffice only via an Apptainer image")
+
+
+@pytest.fixture(scope="session")
+def powerpoint():
+    """Skip unless PowerPoint is installed (never on CI)."""
+    from figlib import render
+    if not render.has_powerpoint():
+        pytest.skip("PowerPoint not installed")

@@ -6,9 +6,10 @@ builds, renders and checks slide by slide.
 
 ## Get started with Claude Code
 
-1. Install [LibreOffice](https://www.libreoffice.org/download/) once (`brew install --cask libreoffice`
-   on a Mac, `winget install TheDocumentFoundation.LibreOffice` on Windows). It renders your slides
-   to images so Claude can look at them.
+1. If you don't have PowerPoint, install [LibreOffice](https://www.libreoffice.org/download/) once
+   (`brew install --cask libreoffice` on a Mac, `winget install TheDocumentFoundation.LibreOffice` on
+   Windows). It renders your slides to images so Claude can look at them.
+   figlib uses PowerPoint if installed, else LibreOffice.
 2. Install the plugin, in a Claude Code session:
    ```
    /plugin marketplace add bilalchaudhry03-commits/figlib

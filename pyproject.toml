@@ -16,7 +16,8 @@ dependencies = ["numpy>=1.24", "matplotlib>=3.7"]
 
 [project.optional-dependencies]
 html = ["playwright>=1.40"]                        # check_layout, export_svg (then: playwright install chromium)
-deck = ["python-pptx>=1.0", "cairosvg>=2.7", "pypdfium2>=4.30"]   # deck, outline, render (+ LibreOffice for render)
+deck = ["python-pptx>=1.0", "cairosvg>=2.7", "pypdfium2>=4.30",
+        "pywin32>=306; sys_platform == 'win32'"]   # deck, outline, render (+ PowerPoint or LibreOffice for render)
 video = ["imageio-ffmpeg>=0.5"]                    # anim, scene, clip
 structure = ["gemmi>=0.6", "scipy>=1.10"]          # silhouette
 all = ["figlib[html,deck,video,structure]"]

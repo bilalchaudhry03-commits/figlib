@@ -11,14 +11,15 @@ many times, is what makes the deck good — so run it every time, not just at th
 
 ## Setup (once per session)
 
-figlib must be installed: follow the setup block in the `figlib` skill. Then check LibreOffice,
-which the render step uses:
+figlib must be installed: follow the setup block in the `figlib` skill. Then check the render engine:
 
 ```bash
-python -c "from figlib import render; print(render.find_soffice())"
+python -c "from figlib import render; print(render.pick_engine())"
 ```
 
-If it isn't found, ask the user to install it (libreoffice.org/download, or
+`powerpoint` means LibreOffice is optional: skip the rest of this section.
+
+If it raises (neither is installed), ask the user to install LibreOffice (libreoffice.org/download, or
 `brew install --cask libreoffice` on a Mac, `winget install TheDocumentFoundation.LibreOffice` on
 Windows) — about 1 GB, once. On a cluster without it, an Apptainer image can be named in
 `FIGLIB_LIBREOFFICE_SIF` (run renders on a compute node). Without a render you are building blind:

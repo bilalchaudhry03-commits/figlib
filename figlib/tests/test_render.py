@@ -1,4 +1,4 @@
-"""figlib.render: finding LibreOffice, slide flags, the font check, and (where installed) a real render."""
+"""figlib.render: picking an engine, finding LibreOffice, slide flags, the font check, and (where installed) real renders."""
 
 import pytest
 
@@ -33,6 +33,53 @@ def test_find_soffice_prefers_env_and_explains_when_missing(monkeypatch):
     monkeypatch.setattr(render, "WIN_SOFFICE", [])
     with pytest.raises(FileNotFoundError, match="LibreOffice"):
         render.find_soffice()
+
+
+def test_pick_engine_order_and_override(monkeypatch):
+    monkeypatch.delenv("FIGLIB_RENDERER", raising=False)
+    monkeypatch.setattr(render, "find_soffice", lambda explicit=None: ["soffice"])
+    monkeypatch.setattr(render, "has_powerpoint", lambda: True)
+    assert render.pick_engine() == "powerpoint"
+    assert render.pick_engine("/y/soffice") == "libreoffice"        # an explicit soffice means LibreOffice
+    monkeypatch.setenv("FIGLIB_RENDERER", "libreoffice")
+    assert render.pick_engine() == "libreoffice"
+    monkeypatch.setattr(render, "has_powerpoint", lambda: False)
+    monkeypatch.delenv("FIGLIB_RENDERER")
+    assert render.pick_engine() == "libreoffice"                    # Argo: no PowerPoint
+    monkeypatch.setenv("FIGLIB_RENDERER", "powerpoint")
+    with pytest.raises(FileNotFoundError, match="PowerPoint is not installed"):
+        render.pick_engine()
+    monkeypatch.setenv("FIGLIB_RENDERER", "keynote")
+    with pytest.raises(ValueError, match="powerpoint or libreoffice"):
+        render.pick_engine()
+
+
+def test_pick_engine_without_either_explains(monkeypatch):
+    monkeypatch.delenv("FIGLIB_RENDERER", raising=False)
+    monkeypatch.setattr(render, "has_powerpoint", lambda: False)
+
+    def missing(explicit=None):
+        raise FileNotFoundError("LibreOffice not found: install it")
+    monkeypatch.setattr(render, "find_soffice", missing)
+    with pytest.raises(FileNotFoundError, match="PowerPoint is not installed, and LibreOffice not found"):
+        render.pick_engine()
+
+
+def test_render_reports_the_engine(tmp_path, monkeypatch):
+    pytest.importorskip("pypdfium2")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    monkeypatch.setattr(render, "pick_engine", lambda soffice=None: "powerpoint")
+
+    def fake_pdf(deck):                     # stands in for PowerPoint: any one-page PDF
+        fig = plt.figure(figsize=(4, 2.25))
+        fig.savefig(deck.with_suffix(".pdf"))
+        plt.close(fig)
+        return deck.with_suffix(".pdf")
+    monkeypatch.setattr(render, "_pdf_powerpoint", fake_pdf)
+    r = render.render(_deck(tmp_path))
+    assert r.engine == "powerpoint" and len(r.pngs) == 1
 
 
 def test_slide_flags_mark_builds_not_static(tmp_path):
@@ -80,10 +127,20 @@ def test_contact_sheet(tmp_path):
     assert w > 4 * render.THUMB_W and h > 2 * 270          # 4 columns, 2 rows
 
 
-def test_real_render(tmp_path, soffice):
+def test_real_render(tmp_path, soffice, monkeypatch):
     pytest.importorskip("pypdfium2")
+    monkeypatch.setenv("FIGLIB_RENDERER", "libreoffice")
     r = render.render(_deck(tmp_path))
     assert len(r.pngs) == 2 and r.contact.exists() and r.pdf.exists()
-    assert r.stacked == [2]
+    assert r.engine == "libreoffice" and r.stacked == [2]
     assert r.fonts and not r.substituted, r.fonts
     assert not list(r.contact.parent.glob(".work_*"))       # temp profile cleaned up
+
+
+def test_real_render_powerpoint(tmp_path, powerpoint, monkeypatch):
+    pytest.importorskip("pypdfium2")
+    monkeypatch.setenv("FIGLIB_RENDERER", "powerpoint")
+    r = render.render(_deck(tmp_path))
+    assert r.engine == "powerpoint" and len(r.pngs) == 2 and r.stacked == [2]
+    assert r.fonts and not r.substituted, r.fonts
+    assert not list(r.contact.parent.glob(".work_*"))
