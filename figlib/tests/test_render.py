@@ -144,3 +144,39 @@ def test_real_render_powerpoint(tmp_path, powerpoint, monkeypatch):
     assert r.engine == "powerpoint" and len(r.pngs) == 2 and r.stacked == [2]
     assert r.fonts and not r.substituted, r.fonts
     assert not list(r.contact.parent.glob(".work_*"))
+
+
+def test_powerpoint_failure_falls_back_to_libreoffice_only_when_automatic(tmp_path, monkeypatch):
+    pytest.importorskip("pypdfium2")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    def fake_lo(deck, soffice):
+        fig = plt.figure(figsize=(4, 2.25))
+        fig.savefig(deck.with_suffix(".pdf"))
+        plt.close(fig)
+        return deck.with_suffix(".pdf")
+
+    def refused(deck):
+        raise RuntimeError("PowerPoint made no PDF (osascript exit 1): automation not allowed")
+
+    monkeypatch.delenv("FIGLIB_RENDERER", raising=False)
+    monkeypatch.setattr(render, "has_powerpoint", lambda: True)
+    monkeypatch.setattr(render, "find_soffice", lambda explicit=None: ["soffice"])
+    monkeypatch.setattr(render, "_pdf_powerpoint", refused)
+    monkeypatch.setattr(render, "_pdf_libreoffice", fake_lo)
+    deck_path = _deck(tmp_path)
+    r = render.render(deck_path)
+    assert r.engine == "libreoffice" and "PowerPoint failed" in r.fallback and "automation" in r.fallback
+    monkeypatch.setenv("FIGLIB_RENDERER", "powerpoint")              # forced: no fallback
+    with pytest.raises(RuntimeError, match="automation"):
+        render.render(deck_path)
+    monkeypatch.delenv("FIGLIB_RENDERER")
+
+    def no_lo(explicit=None):
+        raise FileNotFoundError("LibreOffice not found")
+    monkeypatch.setattr(render, "find_soffice", no_lo)
+    monkeypatch.setattr(render, "pick_engine", lambda soffice=None: "powerpoint")
+    with pytest.raises(RuntimeError, match="automation"):             # nothing to fall back to
+        render.render(deck_path)

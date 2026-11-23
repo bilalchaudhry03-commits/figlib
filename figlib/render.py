@@ -13,6 +13,9 @@ or FIGLIB_RENDERER=libreoffice forces one; passing `soffice=` to `render()` mean
   container (~/Library/Containers/com.microsoft.Powerpoint/Data/figlib) and the PDF is copied out.
   The first run asks to allow automation of PowerPoint: allow it (System Settings > Privacy &
   Security > Automation, if it was refused).
+- If PowerPoint was picked automatically but fails (e.g. a refused automation prompt) and LibreOffice
+  is installed, LibreOffice renders instead and `Report.fallback` / the CLI say why. A forced
+  FIGLIB_RENDERER=powerpoint fails instead. The macOS route is written but has not been run yet.
 - LibreOffice: install once from libreoffice.org; it is found at FIGLIB_SOFFICE, inside an
   Apptainer image at FIGLIB_LIBREOFFICE_SIF (clusters without it), on PATH, or in its standard
   Mac/Windows install location.
@@ -75,6 +78,7 @@ class Report:
     movies: list = field(default_factory=list)        # slide numbers whose movies show as posters
     fonts: list = field(default_factory=list)         # fonts in the PDF
     substituted: list = field(default_factory=list)   # PDF fonts the deck never declared
+    fallback: str = ""                                # why an automatic PowerPoint render fell back
 
 
 def find_soffice(explicit: str | None = None) -> list[str]:
@@ -272,13 +276,31 @@ def render(pptx: Path, out_dir: Path | None = None, *, dpi: int = 110,
     out_dir = Path(out_dir).resolve() if out_dir else pptx.with_name(pptx.stem + "_render")
     out_dir.mkdir(parents=True, exist_ok=True)
     engine = pick_engine(soffice)
+    auto = engine == "powerpoint" and not os.environ.get("FIGLIB_RENDERER")
+    fallback = ""
     # The work dir sits beside the output, not in the system temp dir: on a cluster that is the
     # shared volume, which an Apptainer image can be bound to.
     with tempfile.TemporaryDirectory(dir=out_dir, prefix=".work_") as tmp:
         work = Path(tmp)
         deck_copy = work / "deck.pptx"
         shutil.copy(pptx, deck_copy)
-        made = _pdf_powerpoint(deck_copy) if engine == "powerpoint" else _pdf_libreoffice(deck_copy, soffice)
+        if engine == "powerpoint":
+            try:
+                made = _pdf_powerpoint(deck_copy)
+            except Exception as e:
+                # Picked automatically (not forced) and LibreOffice is here: use it and say why.
+                # A refused macOS automation prompt is the expected case.
+                if not auto:
+                    raise
+                try:
+                    find_soffice()
+                except FileNotFoundError:
+                    raise e from None
+                fallback = f"PowerPoint failed ({type(e).__name__}: {str(e).splitlines()[0][:160]}); used LibreOffice"
+                engine = "libreoffice"
+                made = _pdf_libreoffice(deck_copy, None)
+        else:
+            made = _pdf_libreoffice(deck_copy, soffice)
         pdf = out_dir / (pptx.stem + ".pdf")
         shutil.copy(made, pdf)
 
@@ -297,7 +319,7 @@ def render(pptx: Path, out_dir: Path | None = None, *, dpi: int = 110,
               for i in range(1, len(pngs) + 1)]
     used = pdf_fonts(pdf)
     return Report(pdf=pdf, pngs=pngs, contact=_contact(pngs, labels, out_dir / "contact.png"),
-                  engine=engine, stacked=stacked, movies=movies, fonts=used,
+                  engine=engine, fallback=fallback, stacked=stacked, movies=movies, fonts=used,
                   substituted=_substituted(used, declared_fonts(pptx)))
 
 
@@ -309,6 +331,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     r = render(a.pptx, a.out, dpi=a.dpi)
     print(f"rendered {len(r.pngs)} slides with {r.engine} -> {r.contact.parent}  (contact sheet: {r.contact.name})")
+    if r.fallback:
+        print(f"  {r.fallback}")
     if r.stacked:
         print(f"  layers stacked (click builds/animations; check in PowerPoint): slides {', '.join(map(str, r.stacked))}")
     if r.movies:

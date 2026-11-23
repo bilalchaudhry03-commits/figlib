@@ -17,7 +17,9 @@ figlib must be installed: follow the setup block in the `figlib` skill. Then che
 python -c "from figlib import render; print(render.pick_engine())"
 ```
 
-`powerpoint` means LibreOffice is optional: skip the rest of this section.
+`powerpoint` means LibreOffice is optional: skip the rest of this section. If a render prints
+"PowerPoint failed … used LibreOffice" (on a Mac, usually a refused automation prompt), tell the user
+how to allow it: System Settings > Privacy & Security > Automation.
 
 If it raises (neither is installed), ask the user to install LibreOffice (libreoffice.org/download, or
 `brew install --cask libreoffice` on a Mac, `winget install TheDocumentFoundation.LibreOffice` on
@@ -65,7 +67,9 @@ python -m figlib.outline talk.md       # build; exits 1 and lists any MISSING fi
 python -m figlib.render talk.pptx      # talk_render/contact.png + slide-NN.png
 ```
 
-1. Build. A MISSING line is a figure you still owe; make it or remove the line.
+1. Build. A MISSING line is a figure you still owe; make it or remove the line. A NEAR-WRAP line is
+   text within 1% of wrapping, where the render can disagree with PowerPoint: shorten it (preferred),
+   or tell the user to check that slide in PowerPoint.
 2. Render, then **Read `talk_render/contact.png`** for the whole deck, and the full-size
    `slide-NN.png` of every slide you changed.
 3. Critique each changed slide against the checklist below, fix the outline or the figure, repeat.

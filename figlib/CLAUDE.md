@@ -55,6 +55,10 @@ the README and skills (the outline format lives only in `outline.py`).
   same line breaks except in a band ~0.6-0.8% past the box width, where LibreOffice keeps on one line
   what PowerPoint wraps (its lines run ~0.1-0.2% narrower: ff/ti/fl/tt ligatures plus ~1 pt per line);
   LibreOffice text also sits ~1.5 pt lower. So a LibreOffice render can miss a wrap, never invent one.
+  `deck.near_wraps` (reported by the outline build as NEAR-WRAP) flags every wrap decision within 1%
+  of the box edge, measured in Carlito: renderer-independent, 1 of 62 paragraphs in the generals deck.
+  An automatically chosen PowerPoint that fails falls back to LibreOffice (`Report.fallback`); a forced
+  one fails. The macOS route (osascript through PowerPoint's container) has never been run.
 - One copy of the TTFs, in `figlib/fonts/`. Don't vendor them elsewhere.
 
 **figcheck**

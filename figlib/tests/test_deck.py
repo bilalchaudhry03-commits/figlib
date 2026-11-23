@@ -288,3 +288,14 @@ def test_fallback_png_without_native_cairo_uses_chromium(tmp_path, monkeypatch, 
     assert im.size == (deck.FALLBACK_PX_WIDTH, deck.FALLBACK_PX_WIDTH // 2)
     assert im.getpixel((im.width // 2, im.height // 2)) == (0x2a, 0x78, 0xd6)
     assert not list((tmp_path / "cache").glob("*.html"))
+
+
+def test_near_wraps_flags_only_lines_at_the_edge():
+    title = "Larger proteins enter the nucleus more slowly than small ones"
+    w = deck._measure(True)(title + " x", 30)            # the break decision is on the next word
+    prs = deck.new_presentation()
+    s, box = deck.content_slide(prs, deck.Theme(), "Short title", "")
+    for ratio in (0.995, 0.95):                          # 0.5% short of the edge vs 5%
+        deck._text(s, (box[0], box[1], Pt(w / ratio), Inches(1)), title + " x", pt=30, color="000000", bold=True)
+    hits = deck.near_wraps(prs)
+    assert len(hits) == 1 and hits[0][0] == 0 and abs(hits[0][2] - 0.995) < 0.002

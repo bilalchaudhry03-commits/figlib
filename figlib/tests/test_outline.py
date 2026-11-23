@@ -132,3 +132,14 @@ def test_handout_flattens_animations_to_their_final_frame(tmp_path):
     del man["final"]                                             # an older manifest: no final frame
     (tmp_path / "a_anim.json").write_text(json.dumps(man), encoding="utf-8")
     assert outline.build(md, handout=True).stacked == ["S01"]
+
+
+def test_build_reports_near_wrap_titles(tmp_path):
+    from figlib import deck
+    title = "Import is faster than diffusion for every cargo we measured"
+    width_in = deck._measure(True)(title + " x", 30) / 0.996 / 72
+    md = tmp_path / "talk.md"
+    md.write_text(f"### S01 · {title} x\ntitle_width: {width_in:.4f}\n- one\n\n### S02 · Fine\n- two\n",
+                  encoding="utf-8")
+    r = outline.build(md)
+    assert [sid for sid, _, _ in r.near_wrap] == ["S01"]

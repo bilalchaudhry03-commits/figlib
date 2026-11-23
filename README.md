@@ -9,7 +9,7 @@ builds, renders and checks slide by slide.
 1. If you don't have PowerPoint, install [LibreOffice](https://www.libreoffice.org/download/) once
    (`brew install --cask libreoffice` on a Mac, `winget install TheDocumentFoundation.LibreOffice` on
    Windows). It renders your slides to images so Claude can look at them.
-   figlib uses PowerPoint if installed, else LibreOffice.
+   figlib uses PowerPoint if installed (tested on Windows; the Mac route is untested), else LibreOffice.
 2. Install the plugin, in a Claude Code session:
    ```
    /plugin marketplace add bilalchaudhry03-commits/figlib
@@ -75,8 +75,8 @@ schematic); both pass the checks as they are.
 Python 3.10+ and git:
 
 ```bash
-pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.4.0"     # everything
-pip install "figlib @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.4.0"          # matplotlib linter + palette only
+pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.5.0"     # everything
+pip install "figlib @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.5.0"          # matplotlib linter + palette only
 python -m playwright install chromium                                                           # once, for the HTML tools
 ```
 

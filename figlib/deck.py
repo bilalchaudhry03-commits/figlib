@@ -723,6 +723,47 @@ def lint_deck(prs, *, min_pt: int = MIN_BODY_PT) -> list[str]:
     return errs
 
 
+NEAR_WRAP = 0.01        # PowerPoint and LibreOffice disagree on lines 0.6-0.8% past the box (2026-11-23)
+
+
+def _measure(bold: bool):
+    from PIL import ImageFont
+    from figlib import fonts
+    face = ImageFont.truetype(str(fonts.FONT_DIR / ("Carlito-Bold.ttf" if bold else "Carlito-Regular.ttf")), 1000)
+    return lambda text, pt: face.getlength(text) * pt / 1000      # Carlito = Calibri's widths, in pt
+
+
+def near_wraps(prs, tol: float = NEAR_WRAP) -> list:
+    """Lines whose wrap is a coin toss: [(slide index, text, width / box)].
+
+    Wraps each paragraph word by word, as PowerPoint does, in Carlito's real metrics, and reports
+    any break decision within `tol` of the box edge. In that band a LibreOffice render can show one
+    line where PowerPoint wraps (lines up to ~0.8% past the box), so a clean render there proves
+    nothing: shorten the text, or check that slide in PowerPoint. The footer is skipped."""
+    out, meas = [], {True: _measure(True), False: _measure(False)}
+    for i, slide in enumerate(prs.slides):
+        for sh in slide.shapes:
+            if not sh.has_text_frame or sh.name == FOOTER_NAME:
+                continue
+            tf = sh.text_frame
+            box = Emu(sh.width - (tf.margin_left or 0) - (tf.margin_right or 0)).pt
+            for para in tf.paragraphs:
+                runs = [r for r in para.runs if r.text]
+                if not runs or not runs[0].font.size:
+                    continue
+                text, pt, m = "".join(r.text for r in runs), runs[0].font.size.pt, meas[bool(runs[0].font.bold)]
+                words = text.split(" ")
+                line, worst = words[0], None
+                for w in words[1:]:
+                    r = m(line + " " + w, pt) / box
+                    if abs(r - 1) < tol and (worst is None or abs(r - 1) < abs(worst - 1)):
+                        worst = r
+                    line = line + " " + w if r <= 1 else w
+                if worst is not None:
+                    out.append((i, text, round(worst, 4)))
+    return out
+
+
 def require_clean(prs, **kw) -> None:
     errs = lint_deck(prs, **kw)
     if errs:

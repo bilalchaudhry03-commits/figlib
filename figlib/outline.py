@@ -43,7 +43,8 @@ assertions: what the audience should conclude. Key lines under the heading:
 
 The deck fails to build on grey or sub-18 pt text (`deck.require_clean`), and the CLI exits 1
 on any missing figure or movie, so a placeholder never reaches the room silently. Notes that
-contain `[DRAFT]` are listed after the build.
+contain `[DRAFT]` are listed after the build, and so is any line within 1% of wrapping
+(NEAR-WRAP, `deck.near_wraps`): there a render may not match PowerPoint.
 
 A PDF of a deck draws every animation layer at once. For a copy to send (a committee pre-read,
 Slack), build with `--handout` and render that: each `animation:` slide shows its final frame (the
@@ -79,6 +80,7 @@ class Report:
     missing: list = field(default_factory=list)     # (slide id, path)
     drafts: list = field(default_factory=list)      # slide ids with [DRAFT] in their notes
     stacked: list = field(default_factory=list)     # handout: animated slides with no final frame
+    near_wrap: list = field(default_factory=list)   # (slide id, text, width / box) within 1% of wrapping
 
 
 def front_matter(text: str) -> tuple[dict, str]:
@@ -280,11 +282,13 @@ def build(outline: Path, out: Path | None = None, *, theme: deck.Theme | None = 
         deck.set_notes(slide, f"{s['id']} — {s['title']}\n\n{notes}")
 
     deck.require_clean(prs)
+    near = [(slides[i]["id"], text, r) for i, text, r in deck.near_wraps(prs)]
     out.parent.mkdir(parents=True, exist_ok=True)
     prs.save(out)
     n_main = sum(s["id"].startswith("S") for s in slides)
     return Report(out=out, main=n_main, backup=len(slides) - n_main, missing=missing,
-                  drafts=[s["id"] for s in slides if "[DRAFT]" in "\n".join(s["notes"])], stacked=stacked)
+                  drafts=[s["id"] for s in slides if "[DRAFT]" in "\n".join(s["notes"])], stacked=stacked,
+                  near_wrap=near)
 
 
 def starter(dest: Path) -> Path:
@@ -319,6 +323,9 @@ def main(argv=None) -> int:
     if r.stacked:
         print(f"  handout: no final frame for {', '.join(r.stacked)} -- these still show every layer at once"
               " (re-run python -m figlib.layers anim on their figures)")
+    for sid, text, ratio in r.near_wrap:
+        print(f"  NEAR-WRAP {sid}: {text[:60]!r} is {abs(ratio - 1) * 100:.1f}% from wrapping"
+              " -- renders can disagree with PowerPoint here; shorten it or check in PowerPoint")
     for sid, f in r.missing:
         print(f"  MISSING {sid}: {f}")
     return 1 if r.missing else 0
