@@ -34,15 +34,18 @@ for labmates); this file is for working on the code.
 | `inputs` | `require(path, why=…)` — declare a script's data inputs |
 | `deck` | .pptx assembly: `Theme`, SVG-with-PNG-fallback figures, equations, movies, `animate`, `lint_deck` |
 | `outline` | Markdown outline → .pptx via `deck` (format in its docstring); ported 2026-11-23 from the generals builder, which it reproduces byte for byte apart from equation-SVG `<dc:date>` stamps |
+| `layers` | HTML figure → per-click SVG layers (`build`) or layer PNGs + manifest + previews (`anim`), for `build:` / `animation:` in an outline; generalised 2026-11-23 from the generals make_build_layers / make_anim_layers scripts |
+| `starter/` | package data: the five-slide starter talk `python -m figlib.outline --starter DIR` copies. Regenerate its figures after editing: `python figs/make_figs.py`, `python -m figlib.layers build figs/workflow.html L1 L2 L3` |
 | `render` | .pptx → PDF → slide PNGs + contact sheet, LibreOffice headless (PATH, Mac/Windows install dirs, `FIGLIB_SOFFICE`, or `FIGLIB_LIBREOFFICE_SIF` on Argo, compute node only) + pypdfium2; fresh profile with Carlito linked in; exits 1 if the PDF uses a font the deck never declared. Generals deck (25 slides, 34 MB): 2 m 11 s on 2 CPUs |
 | `anim` | frames → MP4 + GIF + poster + contact sheet; `.clipped` lists frames touching the edge |
 | `scene`, `clip` | explainer videos; Manim clips rendered in Apptainer |
 
 ## Claude Code plugin
 
-`.claude-plugin/marketplace.json` + `plugins/figlib/` make this repo a plugin marketplace with three
+`.claude-plugin/marketplace.json` + `plugins/figlib/` make this repo a plugin marketplace with four
 skills under `plugins/figlib/skills/`: `figlib` (the API and checks; `references/decks.md`,
-`references/video.md`), `scientific-figure-design` (how to design a schematic: layout, colour roles,
+`references/video.md`), `talk` (the outline → build → render → critique loop for decks, added 0.2.6),
+`scientific-figure-design` (how to design a schematic: layout, colour roles,
 type arithmetic, export traps) and `explainer-video` (workflow and gates). The last two are the
 de-labbed versions of Bilal's personal `scientific-figure-design` and wuhrlab's `explainer-video`
 skills, which were retired on 2026-11-18 once the plugin was installed on Argo (the originals are in

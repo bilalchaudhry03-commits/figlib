@@ -1,0 +1,51 @@
+name: mac + windows check
+
+# Manual only (Actions tab -> "mac + windows check" -> Run workflow): macOS minutes bill at 10x
+# on a private repo. Run it before a release that touches render, outline, layers or the HTML
+# tools -- the paths labmates' laptops take and Argo can't test.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install figlib (everything, as the skill does)
+        run: pip install -e ".[test]"
+      - name: Install Chromium for the HTML tools
+        run: python -m playwright install chromium
+      - name: Install LibreOffice (macOS)
+        if: runner.os == 'macOS'
+        run: brew install --cask libreoffice
+      - name: Install LibreOffice (Windows)
+        if: runner.os == 'Windows'
+        run: choco install libreoffice-fresh -y --no-progress
+      - name: figlib finds LibreOffice where it was installed (no PATH help)
+        run: python -c "from figlib import render; print(render.find_soffice())"
+      - name: Test
+        run: python -m pytest -q -rs figlib/tests
+      - name: Starter talk end to end
+        if: always()
+        run: |
+          python -m figlib.outline --starter starter_talk
+          python -m figlib.outline starter_talk/talk.md
+          python -m figlib.render starter_talk/talk.pptx
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: starter-render-${{ matrix.os }}
+          path: starter_talk/talk_render/
+          if-no-files-found: warn

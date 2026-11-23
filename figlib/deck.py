@@ -116,9 +116,12 @@ def _text(slide, box, text, *, pt, color, bold=False, font="Calibri",
 
 
 def _logo(slide, theme: Theme, x, y, h, *, path=None, align="right"):
-    """Place the shield (or `path`), or an outlined placeholder box when there is no file.
+    """Place the shield (or `path`); an outlined placeholder box when a logo is set but its file
+    doesn't exist yet; nothing when no logo is set.
     `x` is the right edge for align="right", the left edge for align="left"."""
     path = path or theme.logo
+    if not path:
+        return
     if path and Path(path).exists():
         pic = slide.shapes.add_picture(str(path), x, y, height=h)
         if align == "right":

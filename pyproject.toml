@@ -25,7 +25,8 @@ test = ["figlib[all]", "pytest>=7"]
 include = ["figlib*"]
 
 [tool.setuptools.package-data]
-figlib = ["fonts/*.ttf", "fonts/OFL.txt", "tests/*.py"]   # tests/ has no __init__.py
+figlib = ["fonts/*.ttf", "fonts/OFL.txt", "tests/*.py",
+          "starter/*.md", "starter/figs/*.py", "starter/figs/*.html", "starter/figs/*.svg"]   # tests/ has no __init__.py
 
 [tool.setuptools.dynamic]
 version = {attr = "figlib.__version__"}   # one source of truth

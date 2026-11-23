@@ -1,5 +1,8 @@
 # Building a .pptx with figlib.deck
 
+For a talk, start from the `talk` skill: an outline built by `figlib.outline`, which calls everything
+below for you. Use `figlib.deck` directly only for what the outline format can't express.
+
 Needs the `deck` extra (python-pptx, cairosvg).
 
 ```python
@@ -56,8 +59,8 @@ deck.add_equation_column(slide, [line1, [piece_a, piece_b]], box, cache)       #
   `[("out", bg, 300), ("in", next_movie, 300), ("play", next_movie, ms)]`. PowerPoint can't know which
   frame of a loop is showing at the click, so a crossfade is the seam; start the next movie from the
   loop's first frame and make the loop's last frame equal its first.
-- LibreOffice/PDF renders show every layer at its start position, so builds and animations can only be
-  checked in PowerPoint. Say so when handing a deck over.
+- LibreOffice/PDF renders (`figlib.render`) show every layer at its start position, so builds and
+  animations can only be checked in PowerPoint. Say so when handing a deck over.
 
 ## Movies
 

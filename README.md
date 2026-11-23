@@ -3,25 +3,29 @@
 Tools for making figures that hold up on a projected slide. They were built for one person's
 talks and papers in the Wühr lab and are shared here for the lab to try.
 
-There are three parts:
+There are four parts:
+
+- **Talks as outlines.** You (or Claude) write the talk as a Markdown outline; figlib builds the
+  `.pptx` from it and renders every slide to an image, so each change can be looked at and fixed
+  before the next. See [Making a talk](#making-a-talk).
 
 - **Linters** that catch layout problems you can't see by looking at a figure:
   - labels that overlap or run off the edge;
   - type that will be too small once the figure is shrunk onto a slide;
   - data points that an axis limit silently left out.
 - **An HTML → SVG exporter** whose output opens correctly in PowerPoint and Illustrator.
-- **Slide-deck helpers** that build a `.pptx` from Python.
+- **Slide-deck helpers** that build a `.pptx` from Python (what the outline builder uses).
 
 ## Install
 
 You need access to this private repo and an SSH key on GitHub.
 
 ```bash
-pip install "figlib @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.2.5"          # matplotlib linter + palette only
-pip install "figlib[all] @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.2.5"     # everything
+pip install "figlib @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.2.6"          # matplotlib linter + palette only
+pip install "figlib[all] @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.2.6"     # everything
 ```
 
-The `@v0.2.5` pins a release, so your scripts don't change under you when `main` does. To upgrade, re-run
+The `@v0.2.6` pins a release, so your scripts don't change under you when `main` does. To upgrade, re-run
 the line with the newer tag (listed under the repo's Tags). Drop the `@v…` to track `main` instead.
 
 **Where it runs.** Tested on Linux (Argo). Since v0.2.0 the HTML tools load their font themselves and
@@ -29,9 +33,16 @@ the line with the newer tag (listed under the repo's Tags). Drop the `@v…` to 
 isn't tested yet; tell Bilal if anything breaks there. The matplotlib tools work anywhere.
 
 The extras:
-- `html` installs `check_layout` and `export_svg`. Run `playwright install chromium` once afterwards.
-- `deck` installs the `.pptx` helpers.
+- `html` installs `check_layout`, `export_svg` and `layers`. Run `playwright install chromium` once afterwards.
+- `deck` installs the `.pptx` helpers, the outline builder and the renderer.
 - `video` installs the animation tools.
+
+**LibreOffice**, for rendering decks to images (`figlib.render`): install it once from
+[libreoffice.org](https://www.libreoffice.org/download/), or `brew install --cask libreoffice` (Mac),
+`winget install TheDocumentFoundation.LibreOffice` (Windows), `libreoffice-impress` (Linux). figlib finds
+it in its standard install location. On Argo, set
+`FIGLIB_LIBREOFFICE_SIF=/Genomics/wuehrlab/People/Bilal/envs/libreoffice/libreoffice.sif` and render on a
+compute node.
 
 **Fonts.** figlib includes Carlito, a free font with exactly the same letter widths as Calibri. With it, a layout checked on Linux is the layout PowerPoint will show. matplotlib finds it automatically, and `check_layout`/`export_svg` load it into the browser themselves, under the name Calibri. Nothing to set up. `check_layout` also reports any text that isn't measured in Carlito/Calibri (a FONT finding), so a layout can't silently be checked in the wrong font.
 
@@ -39,7 +50,8 @@ For your own Playwright screenshot scripts, call `figlib.fonts.use_in_browser(pa
 
 ## Using it with Claude Code
 
-This repo is also a Claude Code plugin with three skills:
+This repo is also a Claude Code plugin with four skills:
+- `talk`: build a deck from an outline and look at every slide after each change (see below);
 - `figlib`: use figlib's checks (and rules like "never hide clipped data") whenever you ask for
   figures, SVG exports, decks or videos;
 - `scientific-figure-design`: how to design a schematic or diagram that reads in 30 seconds on a slide;
@@ -54,6 +66,35 @@ Or inside a session: `/plugin marketplace add bilalchaudhry03-commits/figlib`, t
 It uses your existing GitHub SSH key (loaded in ssh-agent) to read this private repo. Claude picks
 the skills up automatically; you can also call one directly, e.g. `/figlib:figlib`. To get updates:
 `claude plugin marketplace update figlib`, then `claude plugin update figlib@figlib`.
+
+## Making a talk
+
+Ask Claude for a talk ("make slides for my lab meeting on …"); the `talk` skill runs this loop. By hand:
+
+```bash
+python -m figlib.outline --starter mytalk     # a five-slide starter: outline, a figure script, a schematic
+python -m figlib.outline mytalk/talk.md       # build mytalk/talk.pptx
+python -m figlib.render mytalk/talk.pptx      # mytalk/talk_render/contact.png: every slide on one page
+```
+
+The outline is the source: **edit `talk.md`, never the `.pptx`**, which every build overwrites. Each
+slide is a block:
+
+```markdown
+### S02 · Larger proteins enter the nucleus more slowly
+figure: figs/rate_vs_size.svg
+notes:
+What to say over this slide.
+```
+
+The title is the claim the slide makes; the figure is the evidence; everything else goes in the
+speaker notes. Slides can also carry click-by-click builds (`build:`), equations, movies and
+animations: the full format is at the top of [`figlib/outline.py`](figlib/outline.py). The build
+fails on grey or small text and on any missing figure.
+
+The render is LibreOffice's, in Carlito (Calibri's exact letter widths), so line breaks and overflows
+match PowerPoint; it fails if the PDF used another font. Click builds and animations show every layer
+at once (marked "layers stacked" on the contact sheet), so check those in PowerPoint.
 
 ## Starting points
 
@@ -132,6 +173,17 @@ The named colours (`pal.entity("GNN")`, `pal.argument("broken")`, …) are the o
 - a final check (`require_clean`) that fails the build on grey text or text under 18 pt.
 
 The house style is in the `Theme` class.
+
+### `layers`: click-by-click builds and animations from an HTML figure
+
+```bash
+python -m figlib.layers build fig.html L1 L2 L3   # fig_L1.svg (with background), transparent fig_L2/L3.svg
+python -m figlib.layers anim fig.html             # moving layers + fig_anim.json + preview frames
+```
+
+For `build`, group the figure into `<g id="L1">`, `<g id="L2">`, … and give its background
+`<rect id="bg">`. For `anim`, the figure defines `window.ANIM` and `window.ANIM_STATE`; see the
+module docstring.
 
 ### Smaller pieces
 

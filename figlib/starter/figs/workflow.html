@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Starter workflow</title>
+<!--
+The starter talk's S03 schematic, built one step per click. Each step is its own group
+(<g id="L1">, L2, L3) and the white background is <rect id="bg">, so
+    python -m figlib.check_layout figs/workflow.html
+    python -m figlib.layers build figs/workflow.html L1 L2 L3
+writes workflow_L1.svg (with background) and transparent workflow_L2/L3.svg for `build:` lines.
+Based on examples/schematic_template.html in the figlib repo.
+-->
+<style>
+  :root {
+    --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #8a8985; --surface: #fcfcfb;
+    --chain-a-fill: #009E73; --chain-a-stroke: #00543D;
+    --chain-b-fill: #CC79A7; --chain-b-stroke: #7A3F60;
+    --chain-c-fill: #E69F00; --chain-c-stroke: #8A5E00;
+    --font: Calibri, Arial, Helvetica, sans-serif;
+  }
+  html, body { margin: 0; background: #ffffff; }
+  svg { width: 100%; max-width: 1600px; height: auto; display: block; }
+  text { font-family: var(--font); fill: var(--ink); }
+  .label { font-size: 48px; font-weight: 700; }
+  .flow  { stroke: var(--ink-2); stroke-width: 3; fill: none; }
+</style>
+</head>
+<body>
+<svg id="fig" viewBox="0 0 1600 640" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6"
+            orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#52514e"/></marker>
+  </defs>
+  <rect id="bg" width="1600" height="640" fill="#ffffff"/>
+  <g id="L1"></g><g id="L2"></g><g id="L3"></g>
+</svg>
+
+<script>
+(function () {
+  // ==== content: one entry per step, left to right ====
+  const STEPS = [
+    {label: "Sample",  fill: "var(--chain-a-fill)", stroke: "var(--chain-a-stroke)"},
+    {label: "Measure", fill: "var(--chain-b-fill)", stroke: "var(--chain-b-stroke)"},
+    {label: "Model",   fill: "var(--chain-c-fill)", stroke: "var(--chain-c-stroke)"},
+  ];
+  // ==== layout grid (viewBox units) ====
+  const W = 1600, CY = 320, PAD_X = 44, BOX_H = 170, GAP = 150, MIN_W = 300;
+
+  const NS = "http://www.w3.org/2000/svg";
+  let root = document.getElementById("L1");
+  const el = (tag, attrs, text) => {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text !== undefined) e.textContent = text;
+    root.appendChild(e);
+    return e;
+  };
+
+  // Size each box to its label, then centre the whole row on the canvas.
+  const labels = STEPS.map((s, i) => { root = document.getElementById("L" + (i + 1));
+    return el("text", {class: "label", "text-anchor": "middle", y: CY + 16}, s.label); });
+  const widths = labels.map(t => Math.max(MIN_W, t.getBBox().width + 2 * PAD_X));
+  let x = (W - widths.reduce((a, b) => a + b, 0) - GAP * (STEPS.length - 1)) / 2;
+  STEPS.forEach((s, i) => {
+    root = document.getElementById("L" + (i + 1));        // each step, and the arrow into it, is one layer
+    const w = widths[i];
+    const box = el("rect", {x, y: CY - BOX_H / 2, width: w, height: BOX_H, fill: s.fill,
+                            stroke: s.stroke, "stroke-width": 3, "fill-opacity": 0.25});
+    root.insertBefore(box, labels[i]);                    // box under its label
+    labels[i].setAttribute("x", x + w / 2);
+    if (i > 0)
+      el("line", {class: "flow", x1: x - GAP + 14, y1: CY, x2: x - 14, y2: CY,
+                  "marker-end": "url(#arrow)"});
+    x += w + GAP;
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 {
   "name": "figlib",
-  "version": "0.2.5",
-  "description": "Teaches Claude to make and check figures, SVG exports, decks and videos with figlib",
+  "version": "0.2.6",
+  "description": "Teaches Claude to make and check figures, SVG exports, talks (outline -> deck -> render) and videos with figlib",
   "author": {
     "name": "Bilal Chaudhry (Wühr lab)"
   }

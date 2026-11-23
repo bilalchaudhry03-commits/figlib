@@ -8,6 +8,7 @@
     inputs        `require(path, why=...)` -- fail early on missing data
     deck          build .pptx decks from Python
     outline       Markdown outline -> .pptx -- `python -m figlib.outline talk.md`
+    layers        HTML figure -> per-click SVG layers / animation manifest for an outline
     render        .pptx -> slide PNGs + contact sheet via LibreOffice -- `python -m figlib.render talk.pptx`
     anim          frames -> MP4 / GIF / poster / contact sheet
     scene, clip   explainer videos (scenes on a timeline, Manim clips)
@@ -15,7 +16,7 @@
 
 from functools import lru_cache as _lru_cache
 
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 
 
 @_lru_cache(maxsize=None)

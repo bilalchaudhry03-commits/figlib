@@ -15,16 +15,16 @@ dropped. Use its checks instead of eyeballing a PNG.
 python -c "import figlib, sys; print(figlib.__version__, sys.executable)"   # which figlib, in which Python
 ```
 
-This skill matches figlib **0.2.5**. If figlib is missing, install it into the project's environment (its
+This skill matches figlib **0.2.6**. If figlib is missing, install it into the project's environment (its
 venv or conda env). If the project has none, ask the user which to use; never install into the system
 Python or with `--user`.
 
 ```bash
-pip install "figlib[all] @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.2.5"
+pip install "figlib[all] @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.2.6"
 python -m playwright install chromium     # once per machine, for check_layout / export_svg
 ```
 
-If the installed version is older than 0.2.5, tell the user and offer to upgrade with the same line; some
+If the installed version is older than 0.2.6, tell the user and offer to upgrade with the same line; some
 calls in this skill may not exist in older versions. Extras, if they want less: `html`, `deck`, `video`.
 Carlito is a free font with Calibri's exact letter widths, so a layout checked here holds in PowerPoint.
 PNGs rendered here use Carlito; for HTML figures the exported SVG is the authority.
@@ -98,7 +98,8 @@ colours — use them only to match those figures.
 - Designing a schematic or diagram (layout, colour roles, type sizing, export traps): use the
   `scientific-figure-design` skill.
 - Making an explainer video (workflow, model checks, content rules): use the `explainer-video` skill.
-- Building a `.pptx`: use `figlib.deck`, not python-pptx directly or another slide-making skill, so
-  `require_clean` can enforce title + content only (no subtitles, captions or grey text). Read
+- Making or revising a talk / slide deck: use the `talk` skill (an outline built with `figlib.outline`
+  and rendered with `figlib.render` after every change), not python-pptx directly or another
+  slide-making skill. For deck code below the outline (`figlib.deck`), read
   [references/decks.md](references/decks.md).
 - Animations, MP4/GIF, explainer videos: read [references/video.md](references/video.md).

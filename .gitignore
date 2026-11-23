@@ -7,3 +7,4 @@ figlib/fonts/.uuid
 examples/*.svg
 examples/*.png
 plugins/figlib/evals/results/
+figlib/starter/figs/*.png

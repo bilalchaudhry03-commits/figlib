@@ -95,3 +95,19 @@ def test_cli_exits_1_on_missing_and_honours_out(tmp_path):
     assert (tmp_path / "x.pptx").exists()
     md.write_text(OUTLINE.split("### B01")[0])
     assert outline.main([str(md)]) == 0
+
+
+def test_starter_builds_clean_and_refuses_a_full_folder(tmp_path):
+    md = outline.starter(tmp_path / "talk")
+    r = outline.build(md)
+    assert r.missing == [] and (r.main, r.backup) == (4, 1)
+    with pytest.raises(FileExistsError):
+        outline.starter(tmp_path / "talk")
+
+
+def test_no_logo_means_no_slot_and_a_missing_logo_is_reported(tmp_path):
+    md = _write(tmp_path, OUTLINE.split("### B01")[0])
+    prs = Presentation(outline.build(md).out)
+    assert not [sh for s in prs.slides for sh in s.shapes if sh.name.startswith("logo")]
+    md.write_text(OUTLINE.replace("root: assets", "root: assets\nlogo: shield.png").split("### B01")[0])
+    assert outline.build(md).missing == [("logo", "shield.png")]

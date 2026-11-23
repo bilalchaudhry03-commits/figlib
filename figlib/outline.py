@@ -1,6 +1,7 @@
 """Build a .pptx from a Markdown outline: the outline is the source, the deck is generated.
 
     python -m figlib.outline talk.md            # writes talk.pptx beside it (or `out:`)
+    python -m figlib.outline --starter mytalk   # a five-slide starter talk to edit
 
 Edit the outline, never the .pptx: a rebuild overwrites it. Ported from the generals-talk
 builder (wuhrlab admin/generals/slides/py/20261030_build_generals_deck.py, 2026-11-23), which
@@ -24,7 +25,8 @@ assertions: what the audience should conclude. Key lines under the heading:
 
     section: title             this block is the title slide (other values are ignored)
     figure: figs/a.svg         the slide's picture, fitted to the content box
-    build: figs/a_L2.svg       (repeatable) a same-size transparent layer over `figure:`, one per click
+    build: figs/a_L2.svg       (repeatable) a same-size transparent layer over `figure:`, one per click;
+                               make them with `python -m figlib.layers build a.html L1 L2 ...`
     equation: \\tau = \\dfrac{V}{kA}   mathtext, no $; above the figure. Before `figure:` it shows
                                with the slide, after it it fades in on a click; ` @x=0.25` centres
                                it over that fraction of the figure's width
@@ -34,7 +36,7 @@ assertions: what the audience should conclude. Key lines under the heading:
     side: figs/b.svg           a figure in an extra column beside the movies
     tag: Expected result       a black-outlined label top right; the figure shrinks below it
     title_width: 12.67         widen this slide's title box (inches) to keep it on one line
-    animation: a_anim.json     layered animation manifest (layers + per-click steps)
+    animation: a_anim.json     moving layers, from `python -m figlib.layers anim a.html`
     - a bullet                 top-level bullets, used only when the slide has no figure/movie
     notes:                     everything after this line is speaker notes, verbatim
 
@@ -48,6 +50,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -59,6 +62,7 @@ from figlib import deck
 FIG_FRAC = 0.46               # `derivation:` slides: the figure's share of the content width
 DERIV_GAP = Inches(0.3)       # between the figure column and the equations
 FRONT_KEYS = {"author", "out", "root", "logo", "title_logo"}
+STARTER = Path(__file__).resolve().parent / "starter"
 
 
 @dataclass
@@ -145,13 +149,14 @@ def build(outline: Path, out: Path | None = None, *, theme: deck.Theme | None = 
     out = Path(out) if out is not None else here / meta["out"] if "out" in meta else outline.with_suffix(".pptx")
     cache = Path(cache_dir) if cache_dir is not None else out.parent / "_generated"
     author = author if author is not None else meta.get("author", "")
+    missing = []
     if theme is None:
         logos = {k: root / meta[k] for k in ("logo", "title_logo") if k in meta}
-        theme = deck.Theme(**{k: p for k, p in logos.items() if p.exists()})
+        missing += [(k, meta[k]) for k, p in logos.items() if not p.exists()]   # slot shows; build fails
+        theme = deck.Theme(**logos)
 
     slides = parse(body)
     prs = deck.new_presentation()
-    missing = []
     for s in slides:
         notes = "\n".join(s["notes"]).strip()
         if s.get("section") == "title":
@@ -193,17 +198,22 @@ def build(outline: Path, out: Path | None = None, *, theme: deck.Theme | None = 
                     else:
                         deck.add_figure(slide, src, cell, cache)
             elif "animation" in s:
-                man = json.loads((root / s["animation"]).read_text())
+                man_path = root / s["animation"]
+                man = json.loads(man_path.read_text())
+
+                def at(p):
+                    # root-relative (older manifests), else beside the manifest (figlib.layers anim)
+                    return root / p if (root / p).exists() else man_path.parent / p
                 pics = {}
                 for lay in man["layers"]:
                     # a layer is a PNG, or an MP4 with its poster; both fit `box` the same way
                     srcs = [lay["mp4"], lay["poster"]] if "mp4" in lay else [lay["png"]]
-                    if not all((root / p).exists() for p in srcs):
-                        missing.extend((s["id"], p) for p in srcs if not (root / p).exists())
+                    if not all(at(p).exists() for p in srcs):
+                        missing.extend((s["id"], p) for p in srcs if not at(p).exists())
                     elif "mp4" in lay:
-                        pics[lay["id"]] = deck.add_movie(slide, root / lay["mp4"], root / lay["poster"], box)
+                        pics[lay["id"]] = deck.add_movie(slide, at(lay["mp4"]), at(lay["poster"]), box)
                     else:
-                        pics[lay["id"]] = deck.add_figure(slide, root / lay["png"], box, cache)
+                        pics[lay["id"]] = deck.add_figure(slide, at(lay["png"]), box, cache)
                 if len(pics) == len(man["layers"]):
                     emu = next(iter(pics.values())).width / man["canvas"][0]     # EMU per canvas unit
 
@@ -260,11 +270,29 @@ def build(outline: Path, out: Path | None = None, *, theme: deck.Theme | None = 
                   drafts=[s["id"] for s in slides if "[DRAFT]" in "\n".join(s["notes"])])
 
 
+def starter(dest: Path) -> Path:
+    """Copy the starter talk (outline, figure script, schematic, figures) into `dest`, a new or
+    empty folder. Returns the outline's path."""
+    dest = Path(dest)
+    if dest.exists() and any(dest.iterdir()):
+        raise FileExistsError(f"{dest} is not empty; give a new folder for the starter talk")
+    shutil.copytree(STARTER, dest, dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.png", "_generated", "*.pptx", "*_render"))
+    return dest / "talk.md"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m figlib.outline", description=__doc__.split("\n")[0])
-    ap.add_argument("outline", type=Path)
+    ap.add_argument("outline", type=Path, nargs="?")
     ap.add_argument("-o", "--out", type=Path, help="output .pptx (overrides front matter `out:`)")
+    ap.add_argument("--starter", type=Path, metavar="DIR",
+                    help="copy a five-slide starter talk into DIR (new or empty) instead of building")
     a = ap.parse_args(argv)
+    if a.starter:
+        print(f"wrote the starter talk: {starter(a.starter)}  (build it: python -m figlib.outline {a.starter / 'talk.md'})")
+        return 0
+    if a.outline is None:
+        ap.error("give an outline to build, or --starter DIR")
     r = build(a.outline, a.out)
     print(f"wrote {r.out}: {r.main} main + {r.backup} backup slides")
     if r.drafts:
