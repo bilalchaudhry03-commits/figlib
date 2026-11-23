@@ -33,6 +33,7 @@ for labmates); this file is for working on the code.
 | `fonts` | vendored Carlito; registers with matplotlib, links for Chromium |
 | `inputs` | `require(path, why=…)` — declare a script's data inputs |
 | `deck` | .pptx assembly: `Theme`, SVG-with-PNG-fallback figures, equations, movies, `animate`, `lint_deck` |
+| `outline` | Markdown outline → .pptx via `deck` (format in its docstring); ported 2026-11-23 from the generals builder, which it reproduces byte for byte apart from equation-SVG `<dc:date>` stamps |
 | `anim` | frames → MP4 + GIF + poster + contact sheet; `.clipped` lists frames touching the edge |
 | `scene`, `clip` | explainer videos; Manim clips rendered in Apptainer |
 

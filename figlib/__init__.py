@@ -7,6 +7,7 @@
     fonts         vendored Carlito (metric-compatible with Calibri)
     inputs        `require(path, why=...)` -- fail early on missing data
     deck          build .pptx decks from Python
+    outline       Markdown outline -> .pptx -- `python -m figlib.outline talk.md`
     anim          frames -> MP4 / GIF / poster / contact sheet
     scene, clip   explainer videos (scenes on a timeline, Manim clips)
 """

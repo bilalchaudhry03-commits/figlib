@@ -1,0 +1,97 @@
+"""figlib.outline: front matter, the slide format, and an end-to-end build."""
+
+import pytest
+from pptx import Presentation
+
+from figlib import outline
+
+SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">'
+       '<rect width="200" height="100" fill="#2a78d6"/></svg>')
+
+OUTLINE = """---
+author: A. Presenter
+root: assets
+---
+# My talk
+
+Notes to self above the first slide are ignored.
+### Not a slide: no id
+
+### S01 · A title slide
+section: title
+
+### S02 · Import is faster than diffusion
+figure: fig.svg
+build: fig_L2.svg
+notes:
+Say the number.
+- this dash line is a note, not a bullet
+
+### S03 · Three things
+- one
+- two
+
+### B01 · Backup with a missing figure
+figure: nope.svg
+notes:
+[DRAFT] check this
+"""
+
+
+def _write(tmp_path, text=OUTLINE):
+    (tmp_path / "assets").mkdir()
+    for name in ("fig.svg", "fig_L2.svg"):
+        (tmp_path / "assets" / name).write_text(SVG)
+    md = tmp_path / "talk.md"
+    md.write_text(text)
+    return md
+
+
+def test_front_matter_splits_and_rejects_unknown_keys():
+    meta, body = outline.front_matter("---\nauthor: X\n---\n### S01 · T\n")
+    assert meta == {"author": "X"} and body == "### S01 · T"
+    assert outline.front_matter("### S01 · T") == ({}, "### S01 · T")
+    with pytest.raises(ValueError, match="autor"):
+        outline.front_matter("---\nautor: X\n---\n")
+    with pytest.raises(ValueError, match="never closed"):
+        outline.front_matter("---\nauthor: X\n")
+
+
+def test_parse_needs_an_id_and_keeps_notes_verbatim():
+    slides = outline.parse(outline.front_matter(OUTLINE)[1])
+    assert [s["id"] for s in slides] == ["S01", "S02", "S03", "B01"]
+    s02 = slides[1]
+    assert s02["builds"] == [("fig", "fig_L2.svg")] and s02["bullets"] == []
+    assert "- this dash line is a note, not a bullet" in s02["notes"]
+    assert slides[2]["bullets"] == ["one", "two"]
+
+
+def test_equation_after_figure_is_a_click_and_derivation_splits():
+    s = outline.parse("### S01 · T\nfigure: f.svg\nequation: a = b @x=0.25\n"
+                      "derivation: x >> = y\n")[0]
+    assert s["equation"] == "a = b" and s["equation_x"] == 0.25
+    assert s["builds"] == [("eq", "a = b"), ("deq", (0, 0)), ("deq", (0, 1))]
+    with pytest.raises(ValueError, match="one `equation:`"):
+        outline.parse("### S01 · T\nequation: a\nequation: b\n")
+
+
+def test_build_end_to_end(tmp_path):
+    r = outline.build(_write(tmp_path))
+    assert r.out == tmp_path / "talk.pptx" and r.out.exists()
+    assert (r.main, r.backup) == (3, 1)
+    assert r.missing == [("B01", "nope.svg")] and r.drafts == ["B01"]
+    prs = Presentation(r.out)
+    assert len(prs.slides) == 4
+    texts = [sh.text_frame.text for sh in prs.slides[0].shapes if sh.has_text_frame]
+    assert "A. Presenter" in texts
+    s02 = prs.slides[1]
+    assert sum(sh.shape_type == 13 for sh in s02.shapes) == 2          # figure + one build layer
+    assert s02.notes_slide.notes_text_frame.text.startswith("S02 — Import is faster than diffusion\n\nSay")
+
+
+def test_cli_exits_1_on_missing_and_honours_out(tmp_path):
+    md = _write(tmp_path)
+    assert outline.main([str(md), "-o", str(tmp_path / "x.pptx")]) == 1
+    assert (tmp_path / "x.pptx").exists()
+    md.write_text(OUTLINE.split("### B01")[0])
+    assert outline.main([str(md)]) == 0
