@@ -16,7 +16,7 @@
 
 from functools import lru_cache as _lru_cache
 
-__version__ = "0.2.8"
+__version__ = "0.2.9"
 
 
 @_lru_cache(maxsize=None)

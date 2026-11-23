@@ -18,19 +18,19 @@ There are four parts:
 
 ## Install
 
-You need access to this private repo and an SSH key on GitHub.
+Needs Python 3.10+ and git. No GitHub account needed: the repo is public.
 
 ```bash
-pip install "figlib @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.2.8"          # matplotlib linter + palette only
-pip install "figlib[all] @ git+ssh://git@github.com/bilalchaudhry03-commits/figlib.git@v0.2.8"     # everything
+pip install "figlib @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.2.9"          # matplotlib linter + palette only
+pip install "figlib[all] @ git+https://github.com/bilalchaudhry03-commits/figlib.git@v0.2.9"     # everything
 ```
 
-The `@v0.2.8` pins a release, so your scripts don't change under you when `main` does. To upgrade, re-run
+The `@v0.2.9` pins a release, so your scripts don't change under you when `main` does. To upgrade, re-run
 the line with the newer tag (listed under the repo's Tags). Drop the `@v…` to track `main` instead.
 
-**Where it runs.** Tested on Linux (Argo). Since v0.2.0 the HTML tools load their font themselves and
-`check_layout` reports text measured in any other font, so they should also work on a Mac or Windows. That
-isn't tested yet; tell Bilal if anything breaks there. The matplotlib tools work anywhere.
+**Where it runs.** Linux (Argo), macOS and Windows: the test suite and a starter talk built and rendered
+end to end pass on all three in CI (the manual `mac + windows check` workflow, 2026-11-23). On Windows there is
+no native cairo, so deck PNG fallbacks are drawn by Chromium instead. Tell Bilal if anything breaks.
 
 The extras:
 - `html` installs `check_layout`, `export_svg` and `layers`. Run `playwright install chromium` once afterwards.
@@ -63,7 +63,7 @@ claude plugin install figlib@figlib
 ```
 
 Or inside a session: `/plugin marketplace add bilalchaudhry03-commits/figlib`, then `/plugin install figlib@figlib`.
-It uses your existing GitHub SSH key (loaded in ssh-agent) to read this private repo. Claude picks
+Claude picks
 the skills up automatically; you can also call one directly, e.g. `/figlib:figlib`. To get updates:
 `claude plugin marketplace update figlib`, then `claude plugin update figlib@figlib`.
 
@@ -195,7 +195,7 @@ module docstring.
 ## Tests
 
 ```bash
-pip install "figlib[test] @ git+ssh://..."   # or, from a clone: pip install -e ".[test]"
+pip install "figlib[test] @ git+https://..."   # or, from a clone: pip install -e ".[test]"
 pytest "$(python -c 'import figlib, pathlib; print(pathlib.Path(figlib.__file__).parent / "tests")')"
 ```
 
